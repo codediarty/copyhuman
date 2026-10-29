@@ -40,4 +40,4 @@ Allow: /
 User-agent: Applebot
 Allow: /
 
-Sitemap: https://codediarty.github.io/copyhuman/sitemap.xml
+Sitemap: https://copyhuman.kr/sitemap.xml
