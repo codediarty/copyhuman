@@ -2,7 +2,7 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>
 <title>카피휴먼 가이드</title>
 <link>https://codediarty.github.io/copyhuman/guide/</link>
-<description>AI 작성률 검사, 카피킬러 결과확인서, AI 휴머나이징에 대한 카피휴먼 가이드</description>
+<description>AI 작성률 검사, AI생성검사 결과확인서, AI 휴머나이징에 대한 카피휴먼 가이드</description>
 <language>ko</language>
 <atom:link href="https://codediarty.github.io/copyhuman/rss.xml" rel="self" type="application/rss+xml"/>
 <item><title>카피킬러 AI생성검사 결과확인서 보는 법</title><link>https://codediarty.github.io/copyhuman/guide/copykiller-report/</link><guid>https://codediarty.github.io/copyhuman/guide/copykiller-report/</guid><pubDate>Wed, 28 Oct 2026 09:00:00 +0900</pubDate><description>카피킬러 AI생성검사 상세 결과확인서의 분석 정보(AI작성률 · 전체 영역 · AI 의심 영역 · 높음 · 중간 · 낮음)와 AI 의심 결과를 읽는 법, 무엇부터 고쳐야 하는지 정리했습니다.</description></item>

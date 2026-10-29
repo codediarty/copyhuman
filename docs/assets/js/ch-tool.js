@@ -173,8 +173,8 @@
     }).join('');
     var chars = ck.spans.reduce(function (a, s) { return a + s.t.length; }, 0);
     var parts = spanParts(ck.spans), cost = CH.costParts('pro', parts.map(function (p) { return p.text; }));
-    return '<article class="rep" aria-label="카피킬러 결과확인서 불러오기">' +
-      '<header class="rep-h"><div><small>불러온 결과확인서</small><h3>카피킬러 AI생성검사 결과</h3></div><dl class="rep-meta"><dt>문서</dt><dd>' + esc(S.docName || '-') + '</dd><dt>검사일자</dt><dd>' + esc(S.date || '-') + '</dd><dt>표시 영역</dt><dd>' + regCount(ck.spans) + '곳</dd></dl></header>' +
+    return '<article class="rep" aria-label="AI생성검사 결과확인서 불러오기">' +
+      '<header class="rep-h"><div><small>불러온 결과확인서</small><h3>AI생성검사 결과확인서</h3></div><dl class="rep-meta"><dt>문서</dt><dd>' + esc(S.docName || '-') + '</dd><dt>검사일자</dt><dd>' + esc(S.date || '-') + '</dd><dt>표시 영역</dt><dd>' + regCount(ck.spans) + '곳</dd></dl></header>' +
       '<div class="rep-grid-wrap"><table class="rep-grid"><caption>결과확인서의 분석 정보</caption><thead><tr><th scope="col">AI작성률</th><th scope="col">전체 영역</th><th scope="col">AI 의심 영역</th><th scope="col">높음</th><th scope="col">중간</th><th scope="col">낮음</th></tr></thead>' +
       '<tbody><tr><td class="rate">' + (S.rate != null ? S.rate + '%' : '-') + '</td><td>' + (S.total != null ? S.total : '-') + '</td><td>' + (S.suspect != null ? S.suspect : '-') + '</td><td class="c-hi">' + (S.hi != null ? S.hi : '-') + '</td><td class="c-mid">' + (S.mid != null ? S.mid : '-') + '</td><td class="c-low">' + (S.low != null ? S.low : '-') + '</td></tr></tbody></table></div>' +
       '<div class="rep-sec"><h4>결과확인서에 표시된 영역 <span class="cnt">' + regCount(ck.spans) + '곳 · ' + CH.n(chars) + '자</span></h4>' +
@@ -257,7 +257,7 @@
           try { var keep = { kind: ck.kind, summary: ck.summary, text: ck.text, spans: ck.spans, regions: ck.regions, ok: true }; if (JSON.stringify(keep).length < 2000000) CH.ssset('ch_ck', keep); } catch (eK) { /* 저장 없이 */ }
           ta.value = ck.text; count();
           var s = ck.summary || {};
-          setChip('<div class="file-chip">' + ico('file') + '<b>카피킬러 결과확인서 · ' + esc(S.docName) + '</b><span class="small muted">AI작성률 ' + (s.rate != null ? s.rate + '%' : '-') + ' · 표시 영역 ' + regCount(ck.spans) + '곳</span><button type="button" aria-label="파일 빼기">빼기</button></div>');
+          setChip('<div class="file-chip">' + ico('file') + '<b>AI생성검사 결과확인서 · ' + esc(S.docName) + '</b><span class="small muted">AI작성률 ' + (s.rate != null ? s.rate + '%' : '-') + ' · 표시 영역 ' + regCount(ck.spans) + '곳</span><button type="button" aria-label="파일 빼기">빼기</button></div>');
           setStep(2); show(ckHtml(ck)); bindOut(); toOut();
           return;
         }
