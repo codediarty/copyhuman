@@ -115,6 +115,7 @@
     var w = Math.max(1.5, Math.min(100, rate));
     return '<div class="gauge" aria-hidden="true"><div class="gauge-bar"><i style="width:' + w + '%"></i></div><div class="gauge-bands"><span class="b-ok">0 안전</span><span class="b-mid">20 고위험</span><span class="b-hi">40 부적합<i>100</i></span></div></div>';
   }
+  function stat(label, value, cls) { return '<div><dt>' + label + '</dt><dd' + (cls ? ' class="' + cls + '"' : '') + '>' + value + '</dd></div>'; }
   function docHtml(sent, mode) {   // mode: free | full
     var out = [], cur = -1, buf = [];
     function flush() { if (buf.length) out.push('<p>' + buf.join(' ') + '</p>'); buf = []; }
@@ -150,8 +151,7 @@
       '<dl class="rep-meta"><dt>검사번호</dt><dd>' + esc(N.cn || '-') + '</dd><dt>검사일시</dt><dd>' + nowStr() + '</dd><dt>문서</dt><dd>' + esc(ctx.docName || KINDKO[ctx.kind] || '붙여 넣은 글') + '</dd><dt>글자 수</dt><dd>' + CH.n(N.total || N.chars) + '자</dd></dl></header>' +
       '<div class="rep-v is-' + k + '"><div class="verdict"><span class="pill is-' + k + '">' + ico(BICO[k]) + esc(b.ko) + '</span><h4>' + esc(b.label) + '</h4><ul class="why">' + (b.why || []).map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul></div>' +
       '<div><div class="gauge-n"><b data-n="' + N.rate + '" data-suf="%">' + N.rate + '%</b><span>AI 작성률</span></div>' + gauge(N.rate) + '</div></div>' +
-      '<div class="rep-grid-wrap"><table class="rep-grid"><caption>분석 정보</caption><thead><tr><th scope="col">AI 작성률</th><th scope="col">전체 문장</th><th scope="col">AI 패턴 문장</th><th scope="col">AI 점수 85 이상</th><th scope="col">AI 패턴 구간</th></tr></thead>' +
-      '<tbody><tr><td class="rate">' + N.rate + '%</td><td>' + CH.n(N.n) + '</td><td class="c-hi">' + CH.n(N.aiN) + '</td><td class="c-hi">' + N.lv.hi + '</td><td>' + (N.segN ? N.segAi + ' / ' + N.segN : '-') + '</td></tr></tbody></table></div>' +
+      '<div class="rep-sec stats-sec"><h4>분석 정보</h4><dl class="rep-stats is-' + k + '">' + stat('AI 작성률', N.rate + '%', 'rate') + stat('전체 문장', CH.n(N.n)) + stat('AI 패턴 문장', CH.n(N.aiN), N.aiN ? 'warn' : '') + stat('AI 점수 85 이상', CH.n(N.lv.hi)) + stat('AI 패턴 구간', N.segN ? N.segAi + ' / ' + N.segN : '-') + '</dl></div>' +
       '<div class="rep-sec"><h4>종합 의견</h4><ol class="opinion">' + N.opinion.map(function (o) { return '<li>' + esc(o) + '</li>'; }).join('') + '</ol></div>' +
       '<div class="rep-sec"><h4>AI 패턴 문장 <span class="cnt">' + (N.locked ? '일부 표시' : '전체 표시') + '</span></h4>' + cutNote + lockNote +
       '<div class="legend"><span class="l-hi"><i></i>AI 패턴 문장 · 숫자는 AI 점수(0~99), 진할수록 높음</span></div>' +
@@ -281,8 +281,7 @@
       '<div class="rep-v is-' + k + '"><div class="verdict"><span class="pill is-' + k + '">' + ico(BICO[k]) + esc(band.ko) + '</span><h4>' + esc(band.label) + '</h4><ul class="why">' + band.why.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') +
       '<li>표시된 ' + nreg + '곳 · ' + CH.n(chars) + '자가 이 수치를 만듭니다. 이대로 제출하면 AI 글로 걸러질 수 있습니다.</li></ul></div>' +
       '<div><div class="gauge-n"><b data-n="' + (S.rate != null ? S.rate : 0) + '" data-suf="%">' + (S.rate != null ? S.rate : 0) + '%</b><span>결과확인서 AI작성률</span></div>' + gauge(S.rate || 0) + '</div></div>' +
-      '<div class="rep-grid-wrap"><table class="rep-grid"><caption>카피킬러 결과확인서에 적힌 분석 정보 · 카피킬러 표기 그대로</caption><thead><tr><th scope="col">AI작성률</th><th scope="col">전체 영역</th><th scope="col">AI 의심 영역</th><th scope="col">높음</th><th scope="col">중간</th><th scope="col">낮음</th></tr></thead>' +
-      '<tbody><tr><td class="rate">' + (S.rate != null ? S.rate + '%' : '-') + '</td><td>' + (S.total != null ? S.total : '-') + '</td><td>' + (S.suspect != null ? S.suspect : '-') + '</td><td class="c-hi">' + (S.hi != null ? S.hi : '-') + '</td><td class="c-mid">' + (S.mid != null ? S.mid : '-') + '</td><td class="c-low">' + (S.low != null ? S.low : '-') + '</td></tr></tbody></table></div>' +
+      '<div class="rep-sec stats-sec"><h4>결과확인서에 적힌 분석 정보 <span class="cnt">카피킬러 표기 그대로</span></h4><dl class="rep-stats is-' + k + '">' + stat('AI작성률', S.rate != null ? S.rate + '%' : '-', 'rate') + stat('전체 영역', S.total != null ? S.total : '-') + stat('AI 의심 영역', S.suspect != null ? S.suspect : '-', S.suspect ? 'warn' : '') + stat('높음', S.hi != null ? S.hi : '-') + stat('중간', S.mid != null ? S.mid : '-') + stat('낮음', S.low != null ? S.low : '-') + '</dl></div>' +
       planHtml +
       '<div class="rep-sec"><h4>결과확인서에 표시된 영역 <span class="cnt">' + nreg + '곳 · ' + CH.n(chars) + '자</span></h4>' +
       '<div class="legend"><span class="l-hi"><i></i>결과확인서에 AI 패턴으로 표시된 영역 · 진할수록 결과확인서의 등급이 높음</span></div>' +
