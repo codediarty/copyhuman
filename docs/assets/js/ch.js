@@ -191,12 +191,12 @@
         '<input id="payHp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">' +
         '<button class="btn btn-p btn-lg btn-block" type="button" data-pay></button>' +
         '<p class="code-msg" data-pay-msg role="status"></p>' +
-        '<div class="flow2"><b>카피휴먼</b>' + CH.ico('arrow') + '<b>성균관컨설팅 안전결제</b><span>토스페이먼츠 · 카드 · 간편결제</span></div>' +
+        '<div class="flow2">' + CH.ico('lock') + '<b>성균관컨설팅 안전결제</b><span>토스페이먼츠 · 카드 · 간편결제</span></div>' +
         '<p class="fine">결제가 끝나면 이 화면으로 돌아와 <b>토큰 코드가 바로 열리고</b>, 넣어 둔 글로 하던 일을 이어서 합니다. 코드는 적어 주신 이메일로도 보내 드립니다. 영수증과 카드 명세서에는 성균관컨설팅으로 표시되며, 카피휴먼은 카드 번호 같은 결제 정보를 받지 않습니다.</p>' +
         '<p class="fine"><a href="#" data-shop target="_blank" rel="noopener">성균관컨설팅 결제 페이지에서 결제하기</a>(계좌이체 · 세금계산서, 코드는 영업일 하루 안에 메일로)</p>' +
       '</div>' :
       '<a class="btn btn-p btn-lg btn-block" data-go target="_blank" rel="noopener" href="#"></a>' +
-      '<div class="flow2"><b>카피휴먼</b>' + CH.ico('arrow') + '<b>성균관컨설팅 안전결제</b><span>회원가입 없이 · 카드 · 토스페이 · 계좌이체</span></div>' +
+      '<div class="flow2">' + CH.ico('lock') + '<b>성균관컨설팅 안전결제</b><span>회원가입 없이 · 카드 · 토스페이 · 계좌이체</span></div>' +
       '<p class="fine">결제는 카피휴먼 운영사 <b>성균관컨설팅</b>의 결제 페이지에서 합니다. 주문서의 결과 수령 이메일로 <b>16자리 토큰 코드</b>를 보내 드립니다. 영수증과 카드 명세서에는 성균관컨설팅으로 표시되고, 결제 페이지 상품명에는 엔진 제공사 AIMarker 이름이 함께 보일 수 있습니다.</p>';
     box.innerHTML = '<div class="modal-in"><button class="modal-x" type="button" aria-label="닫기">×</button>' +
       '<div class="stack"><span class="eyebrow">토큰 충전</span><h2 id="buyT">' + CH.esc(opt.title || '필요한 만큼만 충전하세요') + '</h2>' +
@@ -217,7 +217,7 @@
     function cur() { var v = ($('input[name=pk]:checked', box) || {}).value; return list.filter(function (x) { return x.id === v; })[0] || rec; }
     function paint() {
       var p = cur(), go = $('[data-go]', box), pay = $('[data-pay]', box), sh = $('[data-shop]', box);
-      if (go) { go.href = shopUrl(p); go.innerHTML = '<span>성균관컨설팅에서 ' + CH.n(p.price) + '원 결제하기</span>' + CH.ico('ext'); }
+      if (go) { go.href = shopUrl(p); go.innerHTML = CH.ico('lock') + '<span>성균관컨설팅에서 ' + CH.n(p.price) + '원 결제하기</span>'; }
       if (pay) pay.innerHTML = '<span>' + CH.n(p.price) + '원 결제하고 바로 코드 받기</span>';
       if (sh) sh.href = shopUrl(p);
     }
@@ -344,6 +344,7 @@
       b.addEventListener('click', function () {
         bs.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
         ex.innerHTML = el.querySelector('template[data-v="' + b.getAttribute('data-v') + '"]').innerHTML;
+        ex.classList.remove('swap'); void ex.offsetWidth; ex.classList.add('swap');
       });
     });
   });
@@ -362,6 +363,60 @@
     [r, cd, ch].forEach(function (x) { x.addEventListener('input', paint); x.addEventListener('change', paint); });
     $$('.presets button', el).forEach(function (b) { b.addEventListener('click', function () { r.value = b.getAttribute('data-n'); paint(); }); });
     paint();
+  });
+
+  /* ---------- 움직임: 스크롤하면 나타나기 · 숫자 올리기 · 형광펜 표시 ---------- */
+  var RM = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var IO = 'IntersectionObserver' in window;
+  CH.reduced = RM;
+  CH.countUp = function (el, to, dec, ms) {   // 0에서 to까지(소수 dec자리)
+    if (RM || !window.requestAnimationFrame) { el.textContent = to.toFixed(dec); return; }
+    var t0 = null; ms = ms || 1100;
+    function f(ts) { if (t0 === null) t0 = ts; var p = Math.min(1, (ts - t0) / ms), e = 1 - Math.pow(1 - p, 3); el.textContent = (to * e).toFixed(dec); if (p < 1) requestAnimationFrame(f); }
+    requestAnimationFrame(f);
+  };
+  CH.sweep = function (scope, delay) {   // 표시된 문장을 형광펜이 지나가듯 차례로 칠함
+    var ss = $$('.s-hi, .s-mid, .s-low, .s-new', scope);
+    if (!ss.length || RM) return;
+    scope.classList.add('sweep');
+    var step = Math.max(35, Math.min(160, 2400 / ss.length));
+    ss.forEach(function (s, k) { setTimeout(function () { s.classList.add('on'); }, (delay || 250) + k * step); });
+  };
+  if (IO && !RM) {
+    var revealSel = '.sec .sec-h, .stats .stat, .steps > li, .pats .pat, .plans .plan, .grid3 > .card, .grid4 > .card, .grid2 > .card, .feature .txt, .feature .sheet, .faq, .expert, .calc, .cta-band .wrap > *';
+    var rio = new IntersectionObserver(function (es) {
+      es.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); rio.unobserve(en.target); } });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    $$(revealSel).forEach(function (el) {
+      if (el.closest('.hero') || el.closest('.out-wrap')) return;
+      var sib = el.parentNode ? Array.prototype.indexOf.call(el.parentNode.children, el) : 0;
+      el.style.setProperty('--d', Math.min(sib, 5) * 70 + 'ms');
+      el.classList.add('rv'); rio.observe(el);
+    });
+    var cio = new IntersectionObserver(function (es) {
+      es.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        cio.unobserve(en.target);
+        var el = en.target;
+        if (el.hasAttribute('data-count')) CH.countUp(el, parseFloat(el.getAttribute('data-count')), +(el.getAttribute('data-dec') || 0), 1300);
+        if (el.hasAttribute('data-hl')) CH.sweep(el, 300);
+      });
+    }, { threshold: 0.35 });
+    $$('[data-count]').forEach(function (el) { el.textContent = (0).toFixed(+(el.getAttribute('data-dec') || 0)); cio.observe(el); });
+    $$('[data-hl]').forEach(function (el) { if ($$('.s-hi, .s-mid, .s-low, .s-new', el).length) { el.classList.add('sweep'); cio.observe(el); } });
+  }
+
+  /* 같은 쪽 검사 칸(#check)으로 가는 단추: 부드럽게 내려가고, 넓은 화면에서는 글 칸에 바로 쓸 수 있게 */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[href="#check"]');
+    var t = document.getElementById('check');
+    if (!a || !t) return;
+    e.preventDefault();
+    var y = t.getBoundingClientRect().top + window.scrollY - 84;
+    window.scrollTo({ top: Math.max(0, y), behavior: RM ? 'auto' : 'smooth' });
+    try { history.replaceState(null, '', '#check'); } catch (e2) { /* 그대로 */ }
+    var ta = $('textarea', t);
+    if (ta && window.matchMedia && window.matchMedia('(pointer: fine)').matches) setTimeout(function () { ta.focus({ preventScroll: true }); }, RM ? 0 : 650);
   });
 
   /* ---------- 아래 고정 단추 ---------- */

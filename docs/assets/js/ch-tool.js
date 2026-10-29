@@ -131,7 +131,7 @@
       '<header class="rep-h"><div><small>카피휴먼 AI 생성 검사</small><h3>상세 결과확인서</h3></div>' +
       '<dl class="rep-meta"><dt>검사번호</dt><dd>' + esc(N.cn || '-') + '</dd><dt>검사일시</dt><dd>' + nowStr() + '</dd><dt>문서</dt><dd>' + esc(ctx.docName || KINDKO[ctx.kind] || '붙여 넣은 글') + '</dd><dt>글자 수</dt><dd>' + CH.n(N.total || N.chars) + '자</dd></dl></header>' +
       '<div class="rep-v is-' + k + '"><div class="verdict"><span class="pill is-' + k + '">' + ico(BICO[k]) + esc(b.ko) + '</span><h4>' + esc(b.label) + '</h4><ul class="why">' + (b.why || []).map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul></div>' +
-      '<div><div class="gauge-n"><b>' + N.rate + '%</b><span>AI 작성률</span></div>' + gauge(N.rate) + '</div></div>' +
+      '<div><div class="gauge-n"><b data-n="' + N.rate + '" data-suf="%">' + N.rate + '%</b><span>AI 작성률</span></div>' + gauge(N.rate) + '</div></div>' +
       '<div class="rep-grid-wrap"><table class="rep-grid"><caption>분석 정보</caption><thead><tr><th scope="col">AI 작성률</th><th scope="col">전체 문장</th><th scope="col">AI 의심 문장</th><th scope="col">높음</th><th scope="col">중간</th><th scope="col">낮음</th></tr></thead>' +
       '<tbody><tr><td class="rate">' + N.rate + '%</td><td>' + CH.n(N.n) + '</td><td>' + CH.n(N.aiN) + '</td><td class="c-hi">' + N.lv.hi + '</td><td class="c-mid">' + N.lv.mid + '</td><td class="c-low">' + N.lv.low + '</td></tr></tbody></table></div>' +
       '<div class="rep-sec"><h4>종합 의견</h4><ol class="opinion">' + N.opinion.map(function (o) { return '<li>' + esc(o) + '</li>'; }).join('') + '</ol></div>' +
@@ -199,9 +199,48 @@
     });
     return parts;
   }
-  function progHtml(label, i, n, note) {
-    var pct = n ? Math.round(i / n * 100) : 30;
-    return '<div class="prog' + (n <= 1 ? ' ind' : '') + '" role="status"><b>' + esc(label) + (n > 1 ? ' ' + i + ' / ' + n : '') + '</b><div class="bar"><i style="width:' + Math.max(6, pct) + '%"></i></div><p>' + esc(note || '문장마다 앞뒤 문장과 함께 AI 글 패턴을 살피고, 정해진 판정 기준으로 판정합니다. 같은 글은 언제나 같은 결과가 나옵니다.') + '</p></div>';
+  /* 검사 중 화면: 넣은 글 위로 훑는 선이 지나가고, 엔진이 하는 일을 차례로 표시(단계는 시간에 맞춰 넘어가며 마지막 단계에서 결과를 기다림) */
+  var STEPS = {
+    check: ['문장 나누기', '문장마다 앞뒤 문장과 함께 AI 글 패턴 살피기', '공개한 판정 기준으로 위험 · 주의 · 양호 판정'],
+    hum: ['AI 문체로 읽히는 표현 찾기', '같은 뜻의 사람 말투로 바꾸기', '숫자 · 이름 · 인용 · 말투가 그대로인지 확인']
+  };
+  function progHtml(label, i, n, note, kind, src) {
+    var pct = n ? Math.round(i / n * 100) : 0, steps = STEPS[kind || 'check'], el = Date.now() - (progHtml.t0 || Date.now());
+    var at = el > 3600 ? 2 : el > 1300 ? 1 : 0;
+    var snippet = String(src || '').slice(0, 420);
+    return '<div class="scan" role="status" data-prog="' + (kind || 'check') + '">' +
+      '<div class="scan-h"><span class="spin" aria-hidden="true"></span><b>' + esc(label) + '</b>' + (n > 1 ? '<span class="scan-n">' + i + ' / ' + n + '</span>' : '') + '</div>' +
+      (snippet ? '<div class="scan-doc" aria-hidden="true"><p>' + esc(snippet) + '</p><i class="scan-line"></i></div>' : '') +
+      '<ol class="scan-steps">' + steps.map(function (t, k) { return '<li class="' + (k < at ? 'done' : k === at ? 'on' : '') + '">' + esc(t) + '</li>'; }).join('') + '</ol>' +
+      '<div class="bar" aria-hidden="true"><i style="width:' + Math.max(8, n > 1 ? pct : Math.min(92, 18 + at * 30)) + '%"></i></div>' +
+      '<p>' + esc(note || '같은 글은 언제나 같은 결과가 나옵니다. 글은 처리한 뒤 저장하지 않습니다.') + '</p></div>';
+  }
+  var progTimer = 0;
+  function progTick(box) {   // 단계 표시만 시간에 맞춰 넘김
+    clearInterval(progTimer);
+    progTimer = setInterval(function () {
+      var sc = box.querySelector('.scan');
+      if (!sc) { clearInterval(progTimer); return; }
+      var el = Date.now() - (progHtml.t0 || Date.now()), at = el > 3600 ? 2 : el > 1300 ? 1 : 0;
+      Array.prototype.forEach.call(sc.querySelectorAll('.scan-steps li'), function (li, k) { li.className = k < at ? 'done' : k === at ? 'on' : ''; });
+      var bar = sc.querySelector('.bar i'), sn = sc.querySelector('.scan-n');
+      if (bar && !sn) bar.style.width = Math.min(92, 18 + at * 30 + Math.min(10, el / 2000)) + '%';
+    }, 400);
+  }
+  /* 결과가 나타날 때: 판이 떠오르고, 숫자가 올라가고, 표시 문장이 형광펜처럼 칠해짐 */
+  function revealOut(scope) {
+    $$('.rep, .pay', scope).forEach(function (el) { el.classList.add('pop'); });
+    if (CH.reduced) return;
+    $$('.gauge-bar i', scope).forEach(function (i) {
+      var w = i.style.width; i.style.width = '0%';
+      requestAnimationFrame(function () { requestAnimationFrame(function () { i.style.width = w; }); });
+    });
+    $$('[data-n]', scope).forEach(function (b) {
+      var to = +b.getAttribute('data-n'), suf = b.getAttribute('data-suf') || '', t0 = null;
+      function f(ts) { if (t0 === null) t0 = ts; var p = Math.min(1, (ts - t0) / 1150), e = 1 - Math.pow(1 - p, 3); b.textContent = Math.round(to * e) + suf; if (p < 1) requestAnimationFrame(f); }
+      b.textContent = '0' + suf; requestAnimationFrame(f);
+    });
+    $$('.doc', scope).forEach(function (d) { if (CH.sweep) CH.sweep(d, 500); });
   }
   function diffHtml(src, out) {   // 바뀐 문장을 초록으로
     var have = {};
@@ -223,7 +262,12 @@
     function say(t, info) { if (!msg) return; msg.hidden = !t; msg.className = 'tool-msg' + (info ? ' info' : ''); msg.textContent = t || ''; }
     function count() { var n = ta.value.length; if (cnt) cnt.innerHTML = '<b>' + CH.n(n) + '</b> / ' + CH.n(PAID_MAX) + '자'; }
     function busy(on) { S.busy = on; runB.disabled = on; $$('[data-act]', out).forEach(function (b) { b.disabled = on; }); }
-    function show(html) { outSec.hidden = false; out.innerHTML = html; }
+    function show(html) {
+      var prog = /class="scan"/.test(html.slice(0, 80));
+      if (prog && !out.querySelector('.scan')) progHtml.t0 = Date.now();
+      outSec.hidden = false; out.innerHTML = html;
+      if (prog) progTick(out); else { clearInterval(progTimer); revealOut(out); }
+    }
     function toOut() { var y = outSec.getBoundingClientRect().top + window.scrollY - 80; window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' }); }
     function kind() { var r = $('input[name=kind]:checked', box); return r ? r.value : S.kind; }
     function setChip(html) { if (!chip) return; chip.hidden = !html; chip.innerHTML = html || ''; var x = $('button', chip); if (x) x.addEventListener('click', clearFile); }
@@ -286,7 +330,7 @@
       if (noSp(t) < 60) { say('60자 이상 넣어 주세요. 문장이 몇 개는 있어야 판정할 수 있습니다.'); ta.focus(); return; }
       if (t.length > PAID_MAX) t = t.slice(0, PAID_MAX);
       say(''); saveDraft(); S.lastT = t; busy(true); setStep(2);
-      show(progHtml('AI 작성률 검사 중', 0, 1)); if (!opt.stay) toOut();
+      show(progHtml('AI 작성률 검사 중', 0, 1, '', 'check', t)); if (!opt.stay) toOut();
       var ctx = { kind: kind(), docName: S.docName };
       freeCheck(t).then(function (N) {
         S.res = N;
@@ -308,9 +352,9 @@
       var t = S.lastT || canon(ta.value); if (!t) return;
       var C = chunk(t), need = CH.costParts('unit', C.parts);
       gate(need, '전체 결과', function () {
-        busy(true); show(progHtml('전체 결과 만드는 중', 0, C.parts.length)); toOut();
+        busy(true); show(progHtml('전체 결과 만드는 중', 0, C.parts.length, '', 'check', t)); toOut();
         seq(C.parts, function (part, i) {
-          return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code }, 120000).then(function (r) { out.innerHTML = progHtml('전체 결과 만드는 중', i + 1, C.parts.length); return r; });
+          return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code }, 120000).then(function (r) { show(progHtml('전체 결과 만드는 중', i + 1, C.parts.length, '', 'check', t)); return r; });
         }).then(function (rs) {
           var N = merge(rs, true, t); N.total = t.length; N.locked = false;
           S.res = N; CH.pass.refresh().then(CH.paintChip);
@@ -370,9 +414,9 @@
       var t = S.lastT || canon(ta.value); if (!t) return;
       var C = chunk(t), need = CH.costParts('pro', C.parts);
       gate(need, 'AI 휴머나이징', function () {
-        busy(true); show(progHtml('AI 문체를 사람 말투로 바꾸는 중', 0, C.parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.')); toOut();
+        busy(true); show(progHtml('AI 문체를 사람 말투로 바꾸는 중', 0, C.parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.', 'hum', t)); toOut();
         seq(C.parts, function (part, i) {
-          return CH.call('am.humanize', { text: part, tone: 'auto', variant: 0, pass: CH.pass.code }, 150000).then(function (r) { out.innerHTML = progHtml('AI 문체를 사람 말투로 바꾸는 중', i + 1, C.parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.'); return r; });
+          return CH.call('am.humanize', { text: part, tone: 'auto', variant: 0, pass: CH.pass.code }, 150000).then(function (r) { show(progHtml('AI 문체를 사람 말투로 바꾸는 중', i + 1, C.parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.', 'hum', t)); return r; });
         }).then(function (rs) {
           var text = rs.map(function (r, i) { return (i ? C.seps[i - 1] : '') + (r.text || ''); }).join('');
           var bc = 0, ba = 0, ac = 0, aa = 0, changed = 0;
@@ -404,12 +448,11 @@
         var box2 = document.createElement('article'); box2.className = 'rep';
         box2.innerHTML = '<header class="rep-h"><div><small>' + esc(label || '첫 문단 미리보기') + '</small><h3>이렇게 다듬어집니다</h3></div><dl class="rep-meta"><dt>바꾼 곳</dt><dd>' + CH.n(r.changes || 0) + '</dd><dt>엔진</dt><dd>' + (r.engine === 'lite' ? 'CH-Lite' : 'HUM 1.1') + '</dd></dl></header>' +
           '<div class="rep-sec"><div class="pairs"><div class="pair"><div><small>원문</small>' + esc(r.src || first) + '</div><div><small>다듬은 문장</small>' + diffHtml(r.src || first, r.text || '') + '</div></div></div>' +
-          ((r.samples || []).length ? '<ul class="opinion">' + r.samples.slice(0, 5).map(function (s) { return '<li><b>' + esc(s.from || '') + '</b> → ' + esc(s.to || '(뺌)') + (s.why ? ' · <span class="muted">' + esc(s.why) + '</span>' : '') + '</li>'; }).join('') + '</ul>' : '') +
           '<p class="fine">' + (r.engine === 'lite' ? '간이 엔진 미리보기입니다. 실제 휴머나이징은 서버 엔진(HUM)이 글 전체를 문장마다 확인하며 다듬습니다.' : '무료 미리보기는 첫 문단만 다듬어 보여 드립니다.') + '</p>' +
           '<div class="acts"><button class="btn btn-p" type="button" data-act="' + (S.ck && label ? 'ckhum' : 'hum') + '">' + (S.ck && label ? '표시된 문장 모두 다듬기' : '글 전체 휴머나이징') + '</button></div></div>';
         var anchor = $('.pay', out);
         if (anchor) out.insertBefore(box2, anchor); else out.appendChild(box2);
-        bindOut(box2); box2.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        bindOut(box2); box2.classList.add('pop'); if (CH.sweep) $$('.s-new', box2).length && $$('.pair > div:last-child', box2).forEach(function (d) { CH.sweep(d, 450); }); box2.scrollIntoView({ block: 'start', behavior: 'smooth' });
       }).catch(fail).then(function () { busy(false); });
     }
     /* 결과확인서에 표시된 문장만(토큰) */
@@ -417,14 +460,14 @@
       var ck = S.ck; if (!ck || !ck.spans.length) return;
       var parts = spanParts(ck.spans), need = CH.costParts('pro', parts.map(function (p) { return p.text; }));
       gate(need, '표시 문장 휴머나이징', function () {
-        busy(true); show(progHtml('표시된 문장 다듬는 중', 0, parts.length, '결과확인서에 표시된 문장만 사람 말투로 바꿉니다. 숫자 · 이름 · 인용은 그대로 둡니다.')); toOut();
+        busy(true); show(progHtml('표시된 문장 다듬는 중', 0, parts.length, '결과확인서에 표시된 문장만 사람 말투로 바꿉니다. 숫자 · 이름 · 인용은 그대로 둡니다.', 'hum', ck.spans.map(function (sp) { return sp.t; }).join(' '))); toOut();
         var newT = ck.spans.map(function (sp) { return sp.t; });
         seq(parts, function (pt, i) {
           return CH.call('am.humanize', { text: pt.text, tone: 'auto', variant: 0, pass: CH.pass.code }, 150000).then(function (r) {
             var outs = String(r.text || '').split(/\n{2,}/);
             if (outs.length === pt.idx.length) { pt.idx.forEach(function (k, j) { newT[k] = outs[j].trim(); }); return; }
             return seq(pt.idx, function (k) { return CH.call('am.humanize', { text: ck.spans[k].t, tone: 'auto', variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { newT[k] = (r2.text || ck.spans[k].t).trim(); }); });
-          }).then(function () { out.innerHTML = progHtml('표시된 문장 다듬는 중', i + 1, parts.length); });
+          }).then(function () { show(progHtml('표시된 문장 다듬는 중', i + 1, parts.length, '', 'hum', ck.spans.map(function (sp) { return sp.t; }).join(' '))); });
         }).then(function () {
           var text = ck.text, pairs = [];
           for (var k = ck.spans.length - 1; k >= 0; k--) { var sp = ck.spans[k]; text = text.slice(0, sp.s) + newT[k] + text.slice(sp.e); }
