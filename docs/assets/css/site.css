@@ -177,7 +177,8 @@ h1 em, h2 em { white-space: nowrap; }
 .tok-chip b { color: var(--ok); font-variant-numeric: tabular-nums; }
 .menu-btn { display: none; width: 42px; height: 42px; border-radius: 11px; border: 1px solid var(--line2); background: var(--card); color: var(--ink); align-items: center; justify-content: center; cursor: pointer; }
 .mnav { display: none; }
-@media (max-width: 1060px) {
+@media (max-width: 1240px) { .hd .wrap { gap: 20px; } .nav a { padding: 8px 9px; } }
+@media (max-width: 1100px) {
   .nav { display: none; }
   .menu-btn { display: inline-flex; }
   .hd .wrap { justify-content: space-between; }

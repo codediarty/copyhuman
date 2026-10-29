@@ -405,7 +405,8 @@
         if (el.hasAttribute('data-hl')) CH.sweep(el, 300);
       });
     }, { threshold: 0.35 });
-    $$('[data-count]').forEach(function (el) { el.textContent = (0).toFixed(+(el.getAttribute('data-dec') || 0)); cio.observe(el); });
+    /* 숫자가 적힌 통계만 셈(검사 칸 글자 수 표시 data-count는 값이 비어 있어 건드리지 않음) */
+    $$('[data-count]:not([data-count=""])').forEach(function (el) { el.textContent = (0).toFixed(+(el.getAttribute('data-dec') || 0)); cio.observe(el); });
     $$('[data-hl]').forEach(function (el) { if ($$('.s-hi, .s-mid, .s-low, .s-new', el).length) { el.classList.add('sweep'); cio.observe(el); } });
   }
 
