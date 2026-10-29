@@ -12,6 +12,27 @@
 
   function TI() { return window.AMTextIn; }
   function canon(t) { return TI() ? TI().canon(t) : LITE.canon(t); }
+  /* 붙여 넣은 글만 한 번 더 정리(파일에서 읽은 글은 그대로): 같은 문서를 어디서 복사해 넣어도 같은 결과가 나오게
+     - 자모가 풀린 한글(NFD, 맥 등에서 복사)을 합침
+     - PDF 보기 화면 등에서 복사해 줄마다 끊긴 문단을 한 줄로 이음(줄 대부분이 거의 같은 길이로 꽉 차 있고 문장 끝이 아닌 데서 끊긴 경우만.
+       목록 · 제목 · 짧은 줄 · 문장이 끝난 줄 뒤는 그대로) */
+  var WRAP_END = /[.?!。…:;]["'”’)\]」』]*$/;
+  var WRAP_MARK = /^(?:[-–—•·*●○■□▶▷◆◇※→]|[①-⑳❶-❿]|\d{1,3}[.)]|[가-힣][.)]|\(\d{1,3}\)|[A-Za-z][.)]\s)/;
+  function unwrap(s) {
+    if (s.indexOf('\n') < 0) return s;
+    return s.split('\n\n').map(function (p) {
+      var L = p.split('\n'); if (L.length < 3) return p;
+      var max = 0; L.forEach(function (x) { if (x.length > max) max = x.length; });
+      if (max < 20) return p;
+      var full = function (x) { return x.length >= max * 0.8 && !WRAP_END.test(x); };
+      var body = L.slice(0, -1);
+      if (body.filter(full).length < body.length * 0.6) return p;
+      var out = L[0];
+      for (var i = 1; i < L.length; i++) out += (full(L[i - 1]) && !WRAP_MARK.test(L[i]) ? ' ' : '\n') + L[i];
+      return out;
+    }).join('\n\n');
+  }
+  function pasted(t) { var s = String(t == null ? '' : t); if (s.normalize) s = s.normalize('NFC'); return unwrap(canon(s)); }
   function noSp(t) { return String(t || '').replace(/\s+/g, '').length; }
   function nowStr() { var d = new Date(), p = function (x) { return ('0' + x).slice(-2); }; return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
   function seq(list, fn) { var out = []; return list.reduce(function (p, x, i) { return p.then(function () { return fn(x, i); }).then(function (r) { out.push(r); }); }, Promise.resolve()).then(function () { return out; }); }
@@ -446,7 +467,7 @@
     function run(opt) {
       opt = opt || {};
       if (S.busy) return;
-      var t = canon(ta.value);
+      var t = S.src || S.ck ? canon(ta.value) : pasted(ta.value);
       if (noSp(t) < 60) { say('60자 이상 넣어 주세요. 문장이 몇 개는 있어야 판정할 수 있습니다.'); ta.focus(); return; }
       if (t.length > PAID_MAX) t = t.slice(0, PAID_MAX);
       say(''); saveDraft(); S.lastT = t; busy(true); setStep(2);
@@ -460,13 +481,28 @@
       }).catch(function (e) { show('<div class="tool-msg">' + esc((e && e.message) || '검사하지 못했어요. 잠시 뒤 다시 시도해 주세요.') + '</div>'); })
         .then(function () { busy(false); });
     }
+    /* 같은 글은 같은 결과: 서버 결과를 글 해시로 이 브라우저에 남겨 두고, 서버가 늦거나 끊겼을 때 간이 엔진보다 먼저 씀 */
+    function keep(key, r) {
+      try {
+        if (!r || r.ok === false) return;
+        var idx = JSON.parse(CH.sget('ch_r1_idx') || '[]').filter(function (k) { return k !== key; });
+        idx.push(key);
+        while (idx.length > 8) CH.sset(idx.shift(), '');
+        CH.sset(key, JSON.stringify(r)); CH.sset('ch_r1_idx', JSON.stringify(idx));
+      } catch (e) { /* 저장 없이 */ }
+    }
+    function kept(key) { try { var j = JSON.parse(CH.sget(key) || 'null'); return j && j.ok !== false ? j : null; } catch (e) { return null; } }
     function freeCheck(t) {
-      var C = chunk(t), first = C.parts[0];
+      var C = chunk(t), first = C.parts[0], key = 'ch_r1_' + LITE.hash(first);
+      var ext = { total: t.length, cut: C.parts.length > 1, checked: first.length };
       var lite = function () { var R = LITE.detect(t, { kind: kind() }); return normalize(LITE.freeView(R), { total: t.length }); };
-      if (CH.server.state === 'off') return Promise.resolve(lite());
-      return CH.call('am.style', { text: first, mode: 'check', tone: 'auto', pass: '' }, 90000).then(function (r) {
-        return normalize(r, { total: t.length, cut: C.parts.length > 1, checked: first.length });
-      }).catch(function (e) { if (e && (e.code === 'OFF' || e.code === 'SLOW')) return lite(); throw e; });
+      var fallback = function () { var k = kept(key); return k ? normalize(k, ext) : lite(); };
+      var call = function () { return CH.call('am.style', { text: first, mode: 'check', tone: 'auto', pass: '' }, 90000); };
+      if (CH.server.state === 'off') return Promise.resolve(fallback());
+      return call().catch(function (e) { if (e && e.code === 'SLOW') return call(); throw e; }).then(function (r) {
+        keep(key, r);
+        return normalize(r, ext);
+      }).catch(function (e) { if (e && (e.code === 'OFF' || e.code === 'SLOW')) return fallback(); throw e; });
     }
     /* 전체 결과(토큰) */
     function fullCheck() {
