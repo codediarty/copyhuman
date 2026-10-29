@@ -1,6 +1,6 @@
 /* 카피휴먼 첫 화면 시연: AI 패턴 검출 → 패턴 DB 대조 → 검출된 표현만 사람 말투로 → 같은 기준으로 다시 검사
    예시 화면입니다. 다듬기 전 표시와 수치는 예시 글을 카피휴먼 판별 엔진 DET 1.0으로 검사한 결과입니다(2026.10.29).
-     다듬기 전: AI 작성률 68% · 위험 · 전체 7문장 가운데 높음 3 · 낮음 1
+     다듬기 전: AI 작성률 68% · 부적합 · 전체 7문장 가운데 AI 패턴 문장 4
    다듬은 글은 문장 뼈대와 길이를 그대로 두고 AI 패턴으로 읽히는 표현만 바꿨습니다. 다듬은 뒤 수치(AFTER)는 엔진으로 다시 재서 고칩니다.
    움직임은 글자 단위 타자가 아니라 페이드 · 교차 전환으로만 냅니다(문서가 열리듯 글이 나타나고, 읽기 표시가 문장을 훑고, 바뀌는 표현만 흐려졌다가 새 표현이 떠오름).
    화면에 보일 때만 움직이고, 세 번 보여 준 뒤 멈춥니다. 움직임 줄이기를 켠 기기에서는 움직이지 않고 결과만 보여 줍니다. */
@@ -24,9 +24,9 @@
       { seg: [['우리 과 동기 서른 명에게 물어보니 텀블러를 쓰는 사람은 일곱 명뿐이었다.']] },
       { seg: [['다들 씻기가 번거롭다고 했다.']] }]
   ];
-  var BEFORE = { rate: 68, hi: 3, mid: 0, low: 1, n: 7 };
-  var AFTER = { rate: 0, hi: 0, mid: 0, low: 0, band: 'safe' };   // 다시 검사 결과(문장별 남은 표시는 문장의 ga)
-  var LV = { hi: '높음', mid: '중간', low: '낮음' };
+  var BEFORE = { rate: 68, hi: 3, mid: 0, low: 1, n: 7, ai: 4 };
+  var AFTER = { rate: 0, hi: 0, mid: 0, low: 0, ai: 0, n: 7, band: 'safe' };   // 다시 검사 결과(문장별 남은 표시는 문장의 ga)
+  var LV = { hi: 'AI 패턴', mid: 'AI 패턴', low: 'AI 패턴' };   // 표시 이름은 한 가지, 색 진하기로 정도를 보임
   var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var S = [];
   var tok = 0, vis = false, loops = 0, MAX = 3, started = false, STOP = { stop: 1 };
@@ -69,13 +69,13 @@
   function setRate(v) { v = Math.max(0, Math.min(100, v)); rateEl.textContent = Math.round(v); vl.style.strokeDashoffset = (CIRC * (1 - v / 100)).toFixed(2); }
   function busy(on) { ring.classList.toggle('busy', !!on); if (on) { rateEl.textContent = '0'; vl.style.strokeDashoffset = (CIRC * 0.8).toFixed(2); } }
   function setBand(b) {
-    ring.classList.remove('unfit', 'safe'); verdict.classList.remove('unfit', 'safe', 'scan');
-    if (b === 'unfit' || b === 'safe') ring.classList.add(b);
+    ring.classList.remove('unfit', 'risk', 'safe'); verdict.classList.remove('unfit', 'risk', 'safe', 'scan');
+    if (b === 'unfit' || b === 'risk' || b === 'safe') ring.classList.add(b);
     if (b) verdict.classList.add(b);
-    verdict.textContent = b === 'unfit' ? '위험 · AI 글로 판정' : b === 'safe' ? '양호 · AI 패턴 없음' : b === 'scan' ? 'AI 패턴 검출 중' : '검사 대기';
+    verdict.textContent = b === 'unfit' ? '부적합 · AI 글로 판정' : b === 'risk' ? '고위험 · AI 패턴 남음' : b === 'safe' ? '안전 · AI 패턴 없음' : b === 'scan' ? 'AI 패턴 검출 중' : '검사 대기';
   }
   function setCount(k, v) { var el = q('[data-dm-c="' + k + '"]'); if (el) el.textContent = v; }
-  function setCounts(o) { setCount('hi', o.hi); setCount('mid', o.mid); setCount('low', o.low); }
+  function setCounts(o) { setCount('ai', o.ai); setCount('n', o.n); }
   function setPh(ph) {
     var order = ['type', 'scan', 'hum', 're'], at = order.indexOf(ph);
     Array.prototype.forEach.call(box.querySelectorAll('[data-dm-ph]'), function (li, i) {
@@ -148,7 +148,7 @@
 
   async function play(my) {
     /* 1. AI 패턴 검출: 문서가 열리고, 읽기 표시가 문장을 차례로 훑음 */
-    build(); busy(true); setBand('scan'); counts.classList.remove('stale'); setCounts({ hi: 0, mid: 0, low: 0 });
+    build(); busy(true); setBand('scan'); counts.classList.remove('stale'); setCounts({ ai: 0, n: 0 });
     setPh('type'); setTab('det'); setChars(0); say('문서를 여는 중');
     paper.classList.remove('fade', 'scanning'); text.classList.add('open');
     await frame(); text.classList.remove('open');
@@ -160,7 +160,7 @@
       say('AI 패턴 검출 중 · 문장 ' + (k + 1) + ' / ' + BEFORE.n);
       await tween(done, done + n, 300, setChars, my);
       done += n;
-      r.el.classList.remove('rd'); r.el.classList.add('seen');
+      r.el.classList.remove('rd'); r.el.classList.add('seen'); setCount('n', k + 1);
       await wait(60, my);
     }
     setChars(total);
@@ -171,19 +171,19 @@
     scanOnce();
     await wait(1450, my);
     S.forEach(function (x) { x.el.classList.remove('seen'); });
-    busy(false); setRate(0);
-    var flagged = S.filter(function (x) { return x.s.g; }), c = { hi: 0, mid: 0, low: 0 };
-    var gauge = tween(0, BEFORE.rate, 1500, setRate, my);
+    busy(false); setRate(0); ring.classList.add('risk');
+    var flagged = S.filter(function (x) { return x.s.g; });
+    var gauge = tween(0, BEFORE.rate, 1500, function (v) { setRate(v); if (v >= 40) { ring.classList.remove('risk'); ring.classList.add('unfit'); } }, my);
     for (var f = 0; f < flagged.length; f++) {
       var x = flagged[f];
       x.el.classList.add('on'); x.tag.hidden = false; void x.tag.offsetWidth; x.tag.classList.add('on');
-      c[x.s.g]++; setCount(x.s.g, c[x.s.g]);
-      say('AI 문장 ' + (f + 1) + '개 검출');
+      setCount('ai', f + 1);
+      say('AI 패턴 문장 ' + (f + 1) + '개 발견');
       await wait(330, my);
     }
     await gauge;
     setBand('unfit');
-    say('AI 문장 ' + flagged.length + '개 검출 · 높음 ' + BEFORE.hi + ' · 낮음 ' + BEFORE.low + ' · 판정 위험');
+    say('AI 패턴 문장 ' + flagged.length + '개 · 전체 ' + BEFORE.n + '문장 · 판정 부적합');
     await wait(2100, my);
 
     /* 3. 검출된 표현만 사람 말투로: 문장 뼈대는 그대로 */
@@ -219,7 +219,7 @@
     });
     setCounts(AFTER); counts.classList.remove('stale');
     setBand(AFTER.band); setPh('end');
-    say('다시 검사 결과 AI 작성률 ' + BEFORE.rate + '%에서 ' + AFTER.rate + '%로 · 판정 ' + (AFTER.band === 'safe' ? '양호' : '주의'));
+    say('다시 검사 결과 AI 작성률 ' + BEFORE.rate + '%에서 ' + AFTER.rate + '%로 · 판정 ' + (AFTER.band === 'safe' ? '안전' : '고위험'));
     await wait(5000, my);
   }
 
@@ -247,12 +247,12 @@
       text.innerHTML = beforeHtml(true);
       setTab('det'); setChars(noSp(beforeText()));
       setRate(BEFORE.rate); setBand('unfit'); setCounts(BEFORE); setPh('hum');
-      say('다듬기 전 AI 작성률 ' + BEFORE.rate + '% · AI 문장 ' + (BEFORE.hi + BEFORE.mid + BEFORE.low) + '개 검출 · 판정 위험');
+      say('다듬기 전 AI 작성률 ' + BEFORE.rate + '% · AI 패턴 문장 ' + BEFORE.ai + '개 · 판정 부적합');
     } else {
       text.innerHTML = afterHtml();
       setTab('hum'); setChars(noSp(afterText()));
       setRate(AFTER.rate); setBand(AFTER.band); setCounts(AFTER); setPh('end');
-      say('다듬기 전 ' + BEFORE.rate + '%(위험), 다듬은 뒤 ' + AFTER.rate + '%(' + (AFTER.band === 'safe' ? '양호' : '주의') + ')');
+      say('다듬기 전 ' + BEFORE.rate + '%(부적합), 다듬은 뒤 ' + AFTER.rate + '%(' + (AFTER.band === 'safe' ? '안전' : '고위험') + ')');
     }
     counts.classList.remove('stale');
     if (replay) {

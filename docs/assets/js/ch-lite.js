@@ -182,19 +182,19 @@
 
   function judge(s) {
     var why = [], mk = function (k, w) {
-      var B = { unfit: ['위험', '위험 · 제출 전 수정 필요'], risk: ['주의', '주의 · 일부 문장 수정 권장'], safe: ['양호', '양호 · AI 패턴 적음'], short: ['판단 보류', '판단 보류 · 글이 짧음'] }[k];
+      var B = { unfit: ['부적합', '부적합 · 제출 전 수정 필요'], risk: ['고위험', '고위험 · 일부 문장 수정 권장'], safe: ['안전', '안전 · AI 패턴 적음'], short: ['판단 보류', '판단 보류 · 글이 짧음'] }[k];
       return { key: k, ko: B[0], label: B[1], why: w };
     };
     if (s.chars < J.SHORT) return mk('short', ['글자 수 ' + s.chars + '자(' + J.SHORT + '자 미만은 판단하지 않음)']);
-    if (s.rate >= J.UNFIT_RATE) why.push('AI 작성률 ' + s.rate + '%(위험 기준 ' + J.UNFIT_RATE + '% 이상)');
-    if (s.segN >= 2 && s.segAi * 100 >= s.segN * J.UNFIT_SEG) why.push('AI 검출 구간 ' + s.segAi + '/' + s.segN + '(위험 기준: 전체 구간의 절반 이상)');
-    if (s.chat >= 1) why.push('대화창 복사 흔적 ' + s.chat + '곳(위험 기준 1곳 이상)');
+    if (s.rate >= J.UNFIT_RATE) why.push('AI 작성률 ' + s.rate + '%(부적합 기준 ' + J.UNFIT_RATE + '% 이상)');
+    if (s.segN >= 2 && s.segAi * 100 >= s.segN * J.UNFIT_SEG) why.push('AI 검출 구간 ' + s.segAi + '/' + s.segN + '(부적합 기준: 전체 구간의 절반 이상)');
+    if (s.chat >= 1) why.push('대화창 복사 흔적 ' + s.chat + '곳(부적합 기준 1곳 이상)');
     if (why.length) return mk('unfit', why);
-    if (s.rate >= J.RISK_RATE) why.push('AI 작성률 ' + s.rate + '%(주의 기준 ' + J.RISK_RATE + '% 이상)');
-    if (s.segAi >= 1) why.push('AI 검출 구간 ' + s.segAi + '/' + s.segN + '(주의 기준 1구간 이상)');
-    if (s.hi + s.mid >= 1) why.push('AI 점수 ' + J.MID + ' 이상 문장 ' + (s.hi + s.mid) + '개(주의 기준 1개 이상)');
+    if (s.rate >= J.RISK_RATE) why.push('AI 작성률 ' + s.rate + '%(고위험 기준 ' + J.RISK_RATE + '% 이상)');
+    if (s.segAi >= 1) why.push('AI 검출 구간 ' + s.segAi + '/' + s.segN + '(고위험 기준 1구간 이상)');
+    if (s.hi + s.mid >= 1) why.push('AI 점수 ' + J.MID + ' 이상 문장 ' + (s.hi + s.mid) + '개(고위험 기준 1개 이상)');
     if (why.length) return mk('risk', why);
-    return mk('safe', ['AI 작성률 ' + s.rate + '%(양호 기준 ' + J.RISK_RATE + '% 미만)', 'AI 검출 구간 없음', 'AI 점수 ' + J.MID + ' 이상 문장 없음']);
+    return mk('safe', ['AI 작성률 ' + s.rate + '%(안전 기준 ' + J.RISK_RATE + '% 미만)', 'AI 검출 구간 없음', 'AI 점수 ' + J.MID + ' 이상 문장 없음']);
   }
 
   /* 검사 */

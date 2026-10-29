@@ -68,7 +68,7 @@
     ['cr', 'left', 'total', 'used', 'added', 'taken', 'spent'].forEach(function (k) { if (typeof p[k] === 'number') p[k] = toTok(p[k]); });
     return p;
   }
-  function bandWord(s) { return typeof s === 'string' ? s.replace(/부적합/g, '위험').replace(/고위험/g, '주의').replace(/안전(?= 기준| ·)/g, '양호') : s; }
+  function bandWord(s) { return s; }   /* 엔진의 판정 말(안전 · 고위험 · 부적합)을 그대로 씀 */
   CH.bandWord = bandWord;
   CH.call = function (action, data, ms) {
     if (server.state === 'off') return Promise.reject({ code: 'OFF', message: '엔진 서버와 연결되지 않았습니다.' });
