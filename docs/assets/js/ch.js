@@ -383,7 +383,7 @@
     ss.forEach(function (s, k) { setTimeout(function () { s.classList.add('on'); }, (delay || 250) + k * step); });
   };
   if (IO && !RM) {
-    var revealSel = '.sec .sec-h, .stats .stat, .steps > li, .pats .pat, .plans .plan, .grid3 > .card, .grid4 > .card, .grid2 > .card, .feature .txt, .feature .sheet, .faq, .expert, .calc, .cta-band .wrap > *';
+    var revealSel = '.sec .sec-h, .stats .stat, .steps > li, .pats .pat, .plans .plan, .grid3 > .card, .grid4 > .card, .grid2 > .card, .feature .txt, .feature .sheet, .faq, .expert, .calc, .cta-band .wrap > *, .statement .wrap > :not(.spec), .spec li, .hero-strip li';
     var rioSeen = false;
     var rio = new IntersectionObserver(function (es) {
       rioSeen = true;
@@ -391,7 +391,7 @@
     }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
     setTimeout(function () { if (!rioSeen) $$('.rv').forEach(function (el) { el.classList.add('in'); }); }, 2500);   // 그리기를 멈춘 화면(미리보기 · 일부 앱)에서도 내용이 보이게
     $$(revealSel).forEach(function (el) {
-      if (el.closest('.hero') || el.closest('.out-wrap')) return;
+      if ((el.closest('.hero') && !el.closest('.hero-strip')) || el.closest('.out-wrap')) return;
       var sib = el.parentNode ? Array.prototype.indexOf.call(el.parentNode.children, el) : 0;
       el.style.setProperty('--d', Math.min(sib, 5) * 70 + 'ms');
       el.classList.add('rv'); rio.observe(el);

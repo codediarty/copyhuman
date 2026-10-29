@@ -9,7 +9,8 @@
   if (!box || !window.Promise) return;
   function q(s) { return box.querySelector(s); }
   var paper = q('.demo-paper'), text = q('.dm-text'), ring = q('.dm-ring'), vl = q('.dm-ring .vl'), rateEl = q('[data-dm-rate]'),
-    verdict = q('[data-dm-verdict]'), counts = q('.dm-counts'), st = q('[data-dm-st]'), replay = q('[data-dm-replay]');
+    verdict = q('[data-dm-verdict]'), counts = q('.dm-counts'), st = q('[data-dm-st]'), replay = q('[data-dm-replay]'),
+    tabs = box.querySelectorAll('[data-dm-tab]'), cnt = q('[data-dm-count]');
   if (!paper || !text || !vl) return;
   var CIRC = 326.73;
   /* 바꾼 문장의 [ ] 안은 새로 들어간 말(민트 표시) */
@@ -80,6 +81,8 @@
     });
   }
   function say(t) { if (st) st.textContent = t; }
+  function setTab(t) { Array.prototype.forEach.call(tabs, function (b) { b.classList.toggle('on', b.getAttribute('data-dm-tab') === t); }); }
+  function setChars(n) { if (cnt) cnt.textContent = Number(n).toLocaleString('ko-KR') + '자'; }
   function scanOnce() { paper.classList.remove('scanning'); void paper.offsetWidth; paper.classList.add('scanning'); }
 
   /* 문서 */
@@ -129,7 +132,7 @@
     /* 1. 글 넣기 */
     build(); setRate(0); setBand(''); counts.classList.remove('stale');
     ['hi', 'mid', 'low'].forEach(function (k) { setCount(k, 0); });
-    setPh('type'); say('검사할 글을 넣는 중');
+    setPh('type'); setTab('det'); setChars(0); say('검사할 글을 넣는 중');
     paper.classList.remove('fade', 'scanning');
     var typed = 0;
     for (var k = 0; k < S.length; k++) {
@@ -141,6 +144,7 @@
         i = Math.min(r.s.t.length, i + 2);
         node.data = r.s.t.slice(0, i);
         say('검사할 글을 넣는 중 · ' + (typed + noSp(node.data)) + '자');
+        setChars(typed + noSp(node.data));
         await wait(24, my);
       }
       typed += noSp(r.s.t);
@@ -169,7 +173,7 @@
     await wait(1900, my);
 
     /* 3. 사람 문장으로 다듬기 */
-    setPh('hum'); counts.classList.add('stale');
+    setPh('hum'); setTab('hum'); counts.classList.add('stale');
     var todo = S.filter(function (x) { return x.s.to; });
     for (var h = 0; h < todo.length; h++) {
       var y = todo[h];
@@ -186,13 +190,14 @@
         if (ps[j].m) { host = document.createElement('mark'); y.el.appendChild(host); }
         await typeInto(host, ps[j].t, my, 2, 26);
       }
+      setChars(noSp(text.textContent));
       await wait(220, my);
     }
     if (caret.parentNode) caret.parentNode.removeChild(caret);
     await wait(300, my);
 
     /* 4. 같은 기준으로 다시 검사 */
-    setPh('re'); setBand('scan'); say('같은 기준으로 다시 검사하는 중');
+    setPh('re'); setTab('det'); setBand('scan'); say('같은 기준으로 다시 검사하는 중');
     scanOnce();
     await wait(1000, my);
     S.forEach(function (z) { if (z.el.classList.contains('on')) { z.el.classList.remove('on'); if (z.tag) z.tag.classList.remove('on'); } });
@@ -226,10 +231,12 @@
     paper.classList.remove('fade', 'scanning');
     if (showBefore) {
       text.innerHTML = beforeHtml(true);
+      setTab('det'); setChars(noSp(text.textContent));
       setRate(BEFORE.rate); setBand('unfit'); setCount('hi', BEFORE.hi); setCount('mid', BEFORE.mid); setCount('low', BEFORE.low); setPh('hum');
       say('다듬기 전 AI 작성률 ' + BEFORE.rate + '% · 판정 위험');
     } else {
       text.innerHTML = afterHtml();
+      setTab('hum'); setChars(noSp(text.textContent));
       setRate(0); setBand('safe'); setCount('hi', 0); setCount('mid', 0); setCount('low', 0); setPh('end');
       say('다듬기 전 ' + BEFORE.rate + '%(위험), 다듬은 뒤 0%(양호)');
     }
