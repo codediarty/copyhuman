@@ -1,6 +1,6 @@
 /* 카피휴먼 간이 엔진 CH-Lite 1.0
    서버 엔진(AIMarker DET · HUM)에 닿지 못할 때만 쓰는 브라우저 안 엔진입니다.
-   - 판정 규칙은 서버 엔진과 같은 틀(문장 점수 → AI 의심 문장 → 구간 → AI 작성률 → 판정)이고, 기준 숫자도 같습니다.
+   - 판정 규칙은 서버 엔진과 같은 틀(문장 점수 → AI 검출 문장 → 구간 → AI 작성률 → 판정)이고, 기준 숫자도 같습니다.
    - 같은 글은 언제나 같은 결과가 나옵니다(무작위 값 없음).
    - 결과는 추정이며 증명이 아닙니다. */
 (function (G) {
@@ -187,14 +187,14 @@
     };
     if (s.chars < J.SHORT) return mk('short', ['글자 수 ' + s.chars + '자(' + J.SHORT + '자 미만은 판단하지 않음)']);
     if (s.rate >= J.UNFIT_RATE) why.push('AI 작성률 ' + s.rate + '%(위험 기준 ' + J.UNFIT_RATE + '% 이상)');
-    if (s.segN >= 2 && s.segAi * 100 >= s.segN * J.UNFIT_SEG) why.push('AI 의심 구간 ' + s.segAi + '/' + s.segN + '(위험 기준: 전체 구간의 절반 이상)');
+    if (s.segN >= 2 && s.segAi * 100 >= s.segN * J.UNFIT_SEG) why.push('AI 검출 구간 ' + s.segAi + '/' + s.segN + '(위험 기준: 전체 구간의 절반 이상)');
     if (s.chat >= 1) why.push('대화창 복사 흔적 ' + s.chat + '곳(위험 기준 1곳 이상)');
     if (why.length) return mk('unfit', why);
     if (s.rate >= J.RISK_RATE) why.push('AI 작성률 ' + s.rate + '%(주의 기준 ' + J.RISK_RATE + '% 이상)');
-    if (s.segAi >= 1) why.push('AI 의심 구간 ' + s.segAi + '/' + s.segN + '(주의 기준 1구간 이상)');
+    if (s.segAi >= 1) why.push('AI 검출 구간 ' + s.segAi + '/' + s.segN + '(주의 기준 1구간 이상)');
     if (s.hi + s.mid >= 1) why.push('AI 점수 ' + J.MID + ' 이상 문장 ' + (s.hi + s.mid) + '개(주의 기준 1개 이상)');
     if (why.length) return mk('risk', why);
-    return mk('safe', ['AI 작성률 ' + s.rate + '%(양호 기준 ' + J.RISK_RATE + '% 미만)', 'AI 의심 구간 없음', 'AI 점수 ' + J.MID + ' 이상 문장 없음']);
+    return mk('safe', ['AI 작성률 ' + s.rate + '%(양호 기준 ' + J.RISK_RATE + '% 미만)', 'AI 검출 구간 없음', 'AI 점수 ' + J.MID + ' 이상 문장 없음']);
   }
 
   /* 검사 */
@@ -247,7 +247,7 @@
       S.forEach(function (s) { if (s.seg === gi) { c += s.c; if (s.ai) a += s.c; } });
       return { c: c, a: a, ai: c && a * 100 / c >= J.SEG_AI ? 1 : 0 };
     });
-    S.forEach(function (s) { if (!s.ai && SG[s.seg].ai && s.p >= J.LOW) { s.ai = 1; s.g = 1; } });   // 의심 구간 안의 50점 이상 문장은 '낮음'
+    S.forEach(function (s) { if (!s.ai && SG[s.seg].ai && s.p >= J.LOW) { s.ai = 1; s.g = 1; } });   // 검출 구간 안의 50점 이상 문장은 '낮음'
     var segOut = SG.map(function (g, gi) {
       var idx = [], c = 0, a = 0, hi = 0, mid = 0, low = 0, fc = {};
       S.forEach(function (s, i) { if (s.seg !== gi) return; idx.push(i); c += s.c; if (s.ai) { a += s.c; if (s.g === 3) hi++; else if (s.g === 2) mid++; else low++; s.hits.forEach(function (h) { fc[h.cat] = 1; }); } });
@@ -281,8 +281,8 @@
       opinion.push('검사한 글 ' + total.toLocaleString('ko-KR') + '자 가운데 ' + aiChars.toLocaleString('ko-KR') + '자(' + rate + '%)가 AI 작성 패턴과 비슷한 문장으로 나왔습니다.');
       opinion.push(segN + '개 구간 가운데 ' + segAi + '개 구간(' + (segN ? Math.round(segAi * 100 / segN) : 0) + '%)에서 AI 작성 패턴이 뚜렷합니다.');
       if (top) opinion.push('가장 많이 나온 AI 문체 특성은 ' + top + '입니다.');
-      opinion.push('AI 의심 문장은 ' + aiN + '개(높음 ' + lv.hi + ' · 중간 ' + lv.mid + ' · 낮음 ' + lv.low + ')입니다. 높음 · 중간 문장부터 고치면 AI 작성률이 가장 크게 내려갑니다.');
-      opinion.push(band.key === 'unfit' ? '지금 상태로 제출하는 것은 권하지 않습니다. 의심 문장을 고쳐 쓰거나 휴머나이징으로 다듬은 뒤 다시 검사해 보세요.' : band.key === 'risk' ? '일부 문장이 AI 문체로 읽힙니다. 표시된 문장을 먼저 다듬어 보세요.' : 'AI 문체가 적습니다. 그래도 제출 전 표현을 한 번 더 확인해 보세요.');
+      opinion.push('AI 검출 문장은 ' + aiN + '개(높음 ' + lv.hi + ' · 중간 ' + lv.mid + ' · 낮음 ' + lv.low + ')입니다. 높음 · 중간 문장부터 고치면 AI 작성률이 가장 크게 내려갑니다.');
+      opinion.push(band.key === 'unfit' ? '지금 상태로 제출하는 것은 권하지 않습니다. 검출 문장을 고쳐 쓰거나 휴머나이징으로 다듬은 뒤 다시 검사해 보세요.' : band.key === 'risk' ? '일부 문장이 AI 문체로 읽힙니다. 표시된 문장을 먼저 다듬어 보세요.' : 'AI 문체가 적습니다. 그래도 제출 전 표현을 한 번 더 확인해 보세요.');
     }
     return {
       ok: true, engine: 'lite',
