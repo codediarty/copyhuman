@@ -253,12 +253,19 @@
   });
 
   if (reduce) { staticView(true); return; }
+  /* 화면에 보이는지: IntersectionObserver를 쓰고, 그 신호가 오지 않는 브라우저에서는 스크롤 위치로 직접 잼 */
+  var ioSeen = false;
+  function inView() { var r = box.getBoundingClientRect(), h = window.innerHeight || document.documentElement.clientHeight; return r.bottom > h * 0.2 && r.top < h * 0.8; }
+  function manual() { if (ioSeen) return; vis = inView(); if (vis && !started) { started = true; run(); } }
   if ('IntersectionObserver' in window) {
     new IntersectionObserver(function (es) {
+      ioSeen = true;
       es.forEach(function (en) {
         vis = en.isIntersecting;
         if (vis && !started) { started = true; run(); }
       });
     }, { threshold: 0.25 }).observe(box);
-  } else { vis = true; started = true; run(); }
+  }
+  window.addEventListener('scroll', manual, { passive: true });
+  setTimeout(manual, 2000);
 })();
