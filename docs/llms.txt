@@ -29,7 +29,7 @@
 - [쓴 만큼만, 토큰으로 충전하세요](https://codediarty.github.io/copyhuman/pricing/): 카피휴먼은 1토큰 100원, 쓴 만큼만 빠지는 충전식입니다. AI 작성률 전체 결과 1,000자 2토큰, AI 휴머나이징 1,000자 4토큰. 체험 3,000원부터, 남은 토큰은 5년 동안 이어서 씁니다.
 - [자주 묻는 질문](https://codediarty.github.io/copyhuman/faq/): AI 작성률 계산법, AI 패턴 문장과 판정 기준, AI 휴머나이징이 바꾸는 것과 지키는 것, 카피킬러 결과확인서 불러오기, 토큰 요금과 결제, 환불, 개인정보까지 카피휴먼에 대해 자주 묻는 질문을 모았습니다.
 - [AI 작성률 가이드](https://codediarty.github.io/copyhuman/guide/): 카피킬러 결과확인서 보는 법, AI 작성률 낮추는 방법, 챗GPT 티 나는 문장 고쳐 쓰기, AI 탐지기의 정확도와 한계, 휴머나이징을 바르게 쓰는 법, 학위논문 체크리스트를 정리했습니다.
-- [카피킬러 AI생성검사 결과확인서 보는 법](https://codediarty.github.io/copyhuman/guide/copykiller-report/): 카피킬러 AI생성검사 상세 결과확인서의 분석 정보(AI작성률 · 전체 영역 · AI 의심 영역 · 높음 · 중간 · 낮음)와 AI 의심 결과를 읽는 법, 무엇부터 고쳐야 하는지 정리했습니다.
+- [카피킬러 AI생성검사 결과확인서 보는 법](https://codediarty.github.io/copyhuman/guide/copykiller-report/): 카피킬러 AI생성검사 상세 결과확인서의 분석 정보 표와 본문의 표시 색을 읽는 법, 무엇부터 고쳐야 하는지 정리했습니다.
 - [카피킬러 AI 작성률 낮추는 방법 7가지](https://codediarty.github.io/copyhuman/guide/lower-ai-rate/): 카피킬러 AI 작성률을 낮추려면 단어를 바꾸기보다 AI 말버릇을 고쳐야 합니다. 첫머리 연결어, 번역투, 빈말, 해석 문장, 고른 문장 길이를 고치는 법을 예문으로 정리했습니다.
 - [챗GPT 티 나는 문장 7가지와 고쳐 쓰는 법](https://codediarty.github.io/copyhuman/guide/ai-patterns/): 챗GPT · 제미나이 같은 AI가 쓴 한국어 글에 자주 나오는 번역투, 상투적 연결어, 빈말, 틀에 박힌 도입과 마무리, 대화창 흔적, 단조로운 리듬, 딱딱한 어휘 7가지 패턴과 고쳐 쓰는 법입니다.
 - [AI 탐지기는 얼마나 정확할까: 사람이 쓴 글이 AI로 나오는 이유](https://codediarty.github.io/copyhuman/guide/ai-detector-accuracy/): AI 탐지기는 글을 쓴 주체를 증명하지 못합니다. 오픈AI가 정확도 문제로 판별기를 내린 일과 비원어민 글을 AI로 오판한 스탠퍼드 연구를 바탕으로 AI 탐지 결과를 읽는 법을 정리했습니다.
