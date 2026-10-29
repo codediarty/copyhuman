@@ -12,6 +12,18 @@
     var t = String(firstPageText || '').replace(/\s+/g, '');
     return /카피킬러/.test(t) && /AI생성검사/.test(t) && /AI작성률/.test(t) && /(전체영역|AI의심영역)/.test(t);
   }
+  /* 결과확인서 종류: ai(AI생성검사) · plag(표절검사) · other(그 밖의 카피킬러 문서) · ''(카피킬러 문서가 아님) */
+  function kindOf(firstPageText) {
+    var t = String(firstPageText || '').replace(/\s+/g, '');
+    if (!/카피킬러/.test(t)) return '';
+    if (/AI생성검사/.test(t) && /AI작성률/.test(t)) return 'ai';
+    if (/표절검사|표절률/.test(t)) return 'plag';
+    return 'other';
+  }
+  function plagRate(firstPageText) {
+    var m = /표절률\s*(\d+(?:\.\d+)?)%/.exec(String(firstPageText || '').replace(/\s+/g, ''));
+    return m ? parseFloat(m[1]) : null;
+  }
 
   function lineGroups(items) {   // 같은 높이끼리 한 줄(위에서 아래로, 왼쪽에서 오른쪽으로)
     var L = [];
@@ -155,7 +167,13 @@
     }).then(function (pdf) {
       return pdf.getPage(1).then(function (p1) { return p1.getTextContent(); }).then(function (tc1) {
         var first = tc1.items.map(function (i) { return i.str; }).join(' ');
-        if (!isCK(first)) { try { pdf.destroy(); } catch (e) { /* 그대로 */ } return null; }
+        var kind = kindOf(first);
+        if (kind !== 'ai') {
+          try { pdf.destroy(); } catch (e) { /* 그대로 */ }
+          if (kind === 'plag') return { kind: 'plagiarism', ok: false, rate: plagRate(first) };
+          if (kind === 'other') return { kind: 'other', ok: false };
+          return null;
+        }
         var pages = [], N = Math.min(pdf.numPages, 400);
         var next = function (k) {
           if (k > N) return Promise.resolve();
@@ -166,6 +184,6 @@
     });
   }
 
-  var API = { isCK: isCK, parse: parse, fromFile: fromFile };
+  var API = { isCK: isCK, kindOf: kindOf, parse: parse, fromFile: fromFile };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else G.CHCK = API;
 })(typeof window !== 'undefined' ? window : this);

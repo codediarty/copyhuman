@@ -42,16 +42,25 @@
   }
 
   /* 서버 · 간이 엔진 결과를 같은 꼴로 */
-  function bandOf(b) {
+  function bandOf(b, aiN) {
     var k = (b && b.key) || 'short';
-    var T = { unfit: ['위험', '위험 · 제출 전 수정 필요'], risk: ['주의', '주의 · 일부 문장 수정 권장'], safe: ['양호', '양호 · AI 패턴 적음'], caution: ['양호', '양호 · AI처럼 읽히는 표현 주의'], short: ['판단 보류', '판단 보류 · 글이 짧음'] }[k] || ['판단 보류', '판단 보류'];
-    return { key: k === 'caution' ? 'safe' : k, ko: T[0], label: T[1], why: ((b && b.why) || []).map(CH.bandWord) };
+    var T = { unfit: ['위험', '위험 · 제출 전 수정 필요'], risk: ['주의', '주의 · 제출 전 수정 권장'], safe: ['양호', '양호 · AI 패턴 적음'], caution: ['양호', '양호 · AI처럼 읽히는 표현 주의'], short: ['판단 보류', '판단 보류 · 글이 짧음'] }[k] || ['판단 보류', '판단 보류'];
+    var label = T[1];
+    if ((k === 'safe' || k === 'caution') && aiN > 0) label = '양호 · 남은 의심 문장 ' + aiN + '개 수정 권장';
+    return { key: k === 'caution' ? 'safe' : k, ko: T[0], label: label, why: ((b && b.why) || []).map(CH.bandWord) };
+  }
+  /* 결과확인서의 AI작성률을 카피휴먼 판정 기준(위험 40% 이상 · 주의 20% 이상)으로 읽음 */
+  function bandOfRate(rate, aiN) {
+    var k = rate == null ? 'short' : rate >= 40 ? 'unfit' : rate >= 20 ? 'risk' : 'safe';
+    var why = rate == null ? [] : [k === 'unfit' ? 'AI작성률 ' + rate + '%(위험 기준 40% 이상)' : k === 'risk' ? 'AI작성률 ' + rate + '%(주의 기준 20% 이상)' : 'AI작성률 ' + rate + '%(주의 기준 20% 미만)'];
+    return bandOf({ key: k, why: why }, aiN);
   }
   function normalize(r, extra) {
     var a = r.ai || r.aiAfter || {};
     var N = {
-      engine: r.engine === 'lite' ? 'lite' : 'server', full: !!r.full, rate: a.rate || 0, band: bandOf(a.band), n: a.n || 0, chars: a.chars || 0, aiChars: a.aiChars || 0,
+      engine: r.engine === 'lite' ? 'lite' : 'server', full: !!r.full, rate: a.rate || 0, n: a.n || 0, chars: a.chars || 0, aiChars: a.aiChars || 0,
       aiN: a.aiN != null ? a.aiN : ((a.lv || {}).hi || 0) + ((a.lv || {}).mid || 0) + ((a.lv || {}).low || 0), lv: a.lv || { hi: 0, mid: 0, low: 0 },
+      band: bandOf(a.band, a.aiN != null ? a.aiN : ((a.lv || {}).hi || 0) + ((a.lv || {}).mid || 0) + ((a.lv || {}).low || 0)),
       segN: a.segN || 0, segAi: a.segAi || 0, chat: a.chat || 0, feat: a.feat || [], opinion: (a.opinion || []).map(CH.bandWord), cn: a.cn || '',
       sentences: a.sentences || [], segs: a.segs || null, model: a.model || '', critName: a.critName || '', samples: r.samples || [], shown: a.shown, locked: !!a.locked || !r.full
     };
@@ -65,6 +74,7 @@
     o.push(M.segN + '개 구간 가운데 ' + M.segAi + '개 구간에서 AI 작성 패턴이 뚜렷합니다.');
     if (top) o.push('가장 많이 나온 AI 문체 특성은 ' + top + '입니다.');
     o.push('AI 의심 문장은 ' + M.aiN + '개(높음 ' + M.lv.hi + ' · 중간 ' + M.lv.mid + ' · 낮음 ' + M.lv.low + ')입니다. 높음 · 중간 문장부터 고치면 AI 작성률이 가장 크게 내려갑니다.');
+    o.push('검사기마다 기준이 달라 카피킬러 · GPT킬러 같은 다른 검사기에서는 이보다 높게 나올 수 있습니다. 의심 문장이 남아 있다면 제출 전에 다듬어 두는 편이 안전합니다.');
     return o;
   }
   function merge(rs, full, src) {
@@ -85,7 +95,7 @@
     M.aiN = M.lv.hi + M.lv.mid + M.lv.low;
     M.rate = M.chars ? Math.round(M.aiChars * 100 / M.chars) : 0;
     M.feat = Object.keys(F).map(function (k) { var f = F[k]; f.share = M.segAi ? Math.round(f.segs * 100 / M.segAi) : 0; return f; }).sort(function (a, b) { return (b.segs - a.segs) || (b.n - a.n); });
-    M.band = bandOf(LITE.judge({ chars: M.chars, rate: M.rate, segN: M.segN, segAi: M.segAi, chat: M.chat, hi: M.lv.hi, mid: M.lv.mid }));
+    M.band = bandOf(LITE.judge({ chars: M.chars, rate: M.rate, segN: M.segN, segAi: M.segAi, chat: M.chat, hi: M.lv.hi, mid: M.lv.mid }), M.aiN);
     M.opinion = opinionOf(M);
     if (!full) M.segs = null;
     return M;
@@ -146,20 +156,59 @@
     var C = chunk(t), det = CH.costParts('unit', C.parts), hum = CH.costParts('pro', C.parts);
     var hasPass = !!CH.pass.code;
     var risky = N.band.key === 'unfit' || N.band.key === 'risk';
+    var head = risky ? 'AI 의심 문장 ' + N.aiN + '개, 제출 전에 다듬으세요' : N.aiN > 0 ? '남은 의심 문장 ' + N.aiN + '개도 다듬어 두면 안전합니다' : '제출 전에 한 번 더 확인하세요';
+    var sub = risky ? '지금 상태로 내면 검사기에 같은 문장이 표시됩니다. 뜻 · 숫자 · 인용은 그대로 두고 걸린 표현만 사람 말투로 바꾼 뒤, 같은 기준으로 다시 검사해 전후를 보여 드립니다.' : '검사기마다 기준이 달라 다른 검사기에서는 더 높게 나올 수 있습니다. 의심 문장을 다듬어 두면 어느 검사기에서든 여유가 생깁니다.';
     return '<section class="pay" aria-label="다음 단계">' +
-      '<div class="pay-h"><span class="eyebrow">다음 단계</span><h3>' + (risky ? 'AI 의심 문장 ' + N.aiN + '개, 제출 전에 다듬으세요' : '제출 전에 한 번 더 확인하세요') + '</h3>' +
-      '<p>이 글 ' + CH.n(t.length) + '자 기준 비용입니다. 1토큰은 100원이고, 쓴 만큼만 빠집니다.</p></div>' +
+      '<div class="pay-h"><span class="eyebrow">다음 단계</span><h3>' + head + '</h3>' +
+      '<p>' + sub + ' 이 글 ' + CH.n(t.length) + '자 기준 비용이며, 1토큰은 100원이고 쓴 만큼만 빠집니다.</p></div>' +
       '<div class="pay-opts">' +
       '<div class="pay-opt rec"><h4>AI 휴머나이징 <span class="badge">추천</span></h4><p class="cost"><b>' + CH.tk(hum) + '토큰</b> · ' + CH.won(hum) + '</p>' +
       '<ul><li>AI 문체를 사람 말투로 글 전체 다듬기</li><li>숫자 · 이름 · 인용 · 각주 자리는 그대로</li><li>다듬기 전후 AI 작성률을 같은 기준으로 비교</li><li>올린 형식(.docx · .hwpx) 또는 워드 파일로 받기</li></ul>' +
       '<button class="btn btn-p btn-block" type="button" data-act="hum">' + (hasPass ? '이 글 휴머나이징하기' : '토큰 충전하고 휴머나이징') + '</button>' +
-      '<button class="btn btn-t btn-s" type="button" data-act="taste">첫 문단만 먼저 다듬어 보기</button></div>' +
+      '<button class="btn btn-t btn-s" type="button" data-act="taste">첫 문단은 무료로 먼저 보기</button></div>' +
       '<div class="pay-opt"><h4>전체 결과 열기</h4><p class="cost"><b>' + CH.tk(det) + '토큰</b> · ' + (det > 0 ? CH.won(det) : '600자 이하') + '</p>' +
       '<ul><li>AI 의심 문장 ' + N.aiN + '개 전부의 위치와 AI 점수</li><li>표현별 AI 패턴과 바꿀 말</li><li>구간(문단)별 AI 비중</li><li>직접 고칠 문장 순서 정리</li></ul>' +
       '<button class="btn btn-g btn-block" type="button" data-act="full">' + (hasPass ? '전체 결과 열기' : '토큰 충전하고 전체 결과 보기') + '</button></div></div>' +
       '<div class="pay-foot"><span>토큰 코드가 있으신가요? <button class="btn btn-t btn-s" type="button" data-act="code">코드 넣기</button></span><span>논문 전체를 맡기려면 <a href="' + CH.url('expert') + '">전문가 휴머나이징</a></span></div></section>';
   }
-  function ckHtml(ck) {
+  /* 결과확인서의 표시 영역: 영역(rg)별 글자 수, 큰 곳부터 */
+  function ckRegions(ck) {
+    var R = {}, order = [];
+    ck.spans.forEach(function (sp) { if (!R[sp.rg]) { R[sp.rg] = { rg: sp.rg, lv: sp.lv, chars: 0, spans: [] }; order.push(R[sp.rg]); } R[sp.rg].chars += sp.t.length; R[sp.rg].spans.push(sp); });
+    return order.sort(function (a, b) { return b.chars - a.chars; });
+  }
+  function ckSpansOf(ck, sel) {   // sel: 영역 번호 목록(없으면 전부)
+    if (!sel || !sel.length) return ck.spans;
+    var ok = {}; sel.forEach(function (r) { ok[r] = 1; });
+    return ck.spans.filter(function (sp) { return ok[sp.rg]; });
+  }
+  function ckCost(ck, sel) { return CH.costParts('pro', spanParts(ckSpansOf(ck, sel)).map(function (p) { return p.text; })); }
+  function hourStr(h) { var m = Math.round(h * 2) / 2; if (m < 1) return '약 30분'; return '약 ' + Math.floor(m) + '시간' + (m % 1 ? ' 30분' : ''); }
+  /* 목표별 계획: 결과확인서 AI작성률 × (남는 표시 글자 ÷ 표시 글자 전체). 큰 영역부터 다듬는 순서로 */
+  function ckPlan(ck) {
+    var S = ck.summary || {}, rate = S.rate, regs = ckRegions(ck), total = regs.reduce(function (a, r) { return a + r.chars; }, 0);
+    if (rate == null || !regs.length || !total) return [];
+    var rows = [], used = {};
+    [30, 20, 10].forEach(function (target) {
+      if (rate < target) return;
+      var fixed = 0, pick = [];
+      for (var i = 0; i < regs.length; i++) {
+        pick.push(regs[i].rg); fixed += regs[i].chars;
+        if (rate * (1 - fixed / total) < target) break;
+      }
+      var est = Math.round(rate * (1 - fixed / total));
+      if (est >= target || used[pick.length]) return;
+      used[pick.length] = 1;
+      rows.push({ target: target, sel: pick, chars: fixed, est: est, n: pick.length });
+    });
+    if (!used[regs.length]) rows.push({ target: 0, sel: regs.map(function (r) { return r.rg; }), chars: total, est: 0, n: regs.length });
+    var H = +CFG.manualHour || 1;   // 직접 고쳐 다시 검사하는 데 1,000자당 걸리는 시간(시간)
+    rows.forEach(function (r) {
+      r.tok = ckCost(ck, r.sel); r.min = Math.max(1, Math.ceil(r.chars / 1200)); r.hour = hourStr(r.chars / 1000 * H);
+    });
+    return rows;
+  }
+  function ckHtml(ck, sel) {
     var S = ck.summary || {}, regions = {}, rows = [];
     var segs = [], pos = 0, text = ck.text, labeled = {};
     ck.spans.forEach(function (sp) { if (sp.s > pos) segs.push({ t: text.slice(pos, sp.s) }); segs.push({ t: text.slice(sp.s, sp.e), sp: sp }); pos = sp.e; });
@@ -171,21 +220,33 @@
       labeled[g.sp.rg] = 1;
       return lab + '<span class="s s-' + g.sp.lv + '">' + h + '</span>';
     }).join('');
-    var chars = ck.spans.reduce(function (a, s) { return a + s.t.length; }, 0);
-    var parts = spanParts(ck.spans), cost = CH.costParts('pro', parts.map(function (p) { return p.text; }));
+    var chars = ck.spans.reduce(function (a, s) { return a + s.t.length; }, 0), nreg = regCount(ck.spans);
+    var cost = ckCost(ck), band = bandOfRate(S.rate, nreg), k = band.key, hasPass = !!CH.pass.code;
+    var plan = ckPlan(ck);
+    var planHtml = plan.length ? '<div class="rep-sec"><h4>목표별 작업 계획 <span class="cnt">큰 영역부터</span></h4>' +
+      '<div class="tbl-wrap plan-wrap"><table class="plan-t"><thead><tr><th scope="col">목표</th><th scope="col">다듬을 영역</th><th scope="col">예상 AI작성률</th><th scope="col">토큰 · 비용</th><th scope="col">카피휴먼</th><th scope="col">직접 고치면</th><th scope="col"></th></tr></thead><tbody>' +
+      plan.map(function (r) {
+        return '<tr' + (r.target === 0 ? ' class="all"' : '') + '><td class="tg" data-th="목표"><b>' + (r.target ? r.target + '% 미만' : '표시 영역 모두') + '</b></td><td data-th="다듬을 영역">' + r.n + '곳 · ' + CH.n(r.chars) + '자</td><td class="est" data-th="예상 AI작성률"><b>' + r.est + '%</b></td><td class="n" data-th="토큰 · 비용"><b>' + CH.tk(r.tok) + '토큰</b> · ' + CH.won(r.tok) + '</td><td data-th="카피휴먼">약 ' + r.min + '분</td><td data-th="직접 고치면">' + r.hour + '</td>' +
+          '<td class="act"><button class="btn btn-s ' + (r.target === 0 ? 'btn-p' : 'btn-g') + '" type="button" data-act="ckplan" data-rg="' + r.sel.join(',') + '">' + (r.target ? r.target + '% 미만으로' : '모두 다듬기') + '</button></td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<p class="fine">예상 AI작성률은 다듬은 영역이 다시 검사에서 잡히지 않을 때의 산술값(결과확인서 수치 × 남는 표시 글자 비율)이며, 카피킬러 재검사 결과를 보장하지 않습니다. 직접 고치는 시간은 1,000자를 고쳐 쓰고 다시 검사하는 데 약 ' + hourStr(+CFG.manualHour || 1).replace('약 ', '') + '으로 잡은 추정입니다.</p></div>' : '';
     return '<article class="rep" aria-label="AI생성검사 결과확인서 불러오기">' +
-      '<header class="rep-h"><div><small>불러온 결과확인서</small><h3>AI생성검사 결과확인서</h3></div><dl class="rep-meta"><dt>문서</dt><dd>' + esc(S.docName || '-') + '</dd><dt>검사일자</dt><dd>' + esc(S.date || '-') + '</dd><dt>표시 영역</dt><dd>' + regCount(ck.spans) + '곳</dd></dl></header>' +
-      '<div class="rep-grid-wrap"><table class="rep-grid"><caption>결과확인서의 분석 정보</caption><thead><tr><th scope="col">AI작성률</th><th scope="col">전체 영역</th><th scope="col">AI 의심 영역</th><th scope="col">높음</th><th scope="col">중간</th><th scope="col">낮음</th></tr></thead>' +
+      '<header class="rep-h"><div><small>불러온 결과확인서 · 카피킬러 AI생성검사</small><h3>결과확인서 AI작성률 ' + (S.rate != null ? S.rate + '%' : '-') + '</h3></div><dl class="rep-meta"><dt>문서</dt><dd>' + esc(S.docName || '-') + '</dd><dt>검사일자</dt><dd>' + esc(S.date || '-') + '</dd><dt>표시 영역</dt><dd>' + nreg + '곳 · ' + CH.n(chars) + '자</dd></dl></header>' +
+      '<div class="rep-v is-' + k + '"><div class="verdict"><span class="pill is-' + k + '">' + ico(BICO[k]) + esc(band.ko) + '</span><h4>' + esc(band.label) + '</h4><ul class="why">' + band.why.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') +
+      '<li>표시된 ' + nreg + '곳 · ' + CH.n(chars) + '자가 이 AI작성률을 만들고 있습니다. 결과확인서를 보는 사람에게도 같은 자리가 표시됩니다.</li></ul></div>' +
+      '<div><div class="gauge-n"><b data-n="' + (S.rate != null ? S.rate : 0) + '" data-suf="%">' + (S.rate != null ? S.rate : 0) + '%</b><span>결과확인서 AI작성률</span></div>' + gauge(S.rate || 0) + '</div></div>' +
+      '<div class="rep-grid-wrap"><table class="rep-grid"><caption>결과확인서의 분석 정보(그대로)</caption><thead><tr><th scope="col">AI작성률</th><th scope="col">전체 영역</th><th scope="col">AI 의심 영역</th><th scope="col">높음</th><th scope="col">중간</th><th scope="col">낮음</th></tr></thead>' +
       '<tbody><tr><td class="rate">' + (S.rate != null ? S.rate + '%' : '-') + '</td><td>' + (S.total != null ? S.total : '-') + '</td><td>' + (S.suspect != null ? S.suspect : '-') + '</td><td class="c-hi">' + (S.hi != null ? S.hi : '-') + '</td><td class="c-mid">' + (S.mid != null ? S.mid : '-') + '</td><td class="c-low">' + (S.low != null ? S.low : '-') + '</td></tr></tbody></table></div>' +
-      '<div class="rep-sec"><h4>결과확인서에 표시된 영역 <span class="cnt">' + regCount(ck.spans) + '곳 · ' + CH.n(chars) + '자</span></h4>' +
-      '<div class="legend"><span class="l-mid"><i></i>중간</span><span class="l-low"><i></i>낮음</span><span class="l-hi"><i></i>높음</span></div>' +
+      planHtml +
+      '<div class="rep-sec"><h4>결과확인서에 표시된 영역 <span class="cnt">' + nreg + '곳 · ' + CH.n(chars) + '자</span></h4>' +
+      '<div class="legend"><span class="l-hi"><i></i>높음</span><span class="l-mid"><i></i>중간</span><span class="l-low"><i></i>낮음</span></div>' +
       '<div class="doc" tabindex="0"><p>' + html + '</p></div>' +
       '<p class="fine">결과확인서의 학번 · 이름 · 이메일 같은 머리 정보는 읽지 않고, 본문과 표시 위치만 이 브라우저 안에서 꺼냈습니다. 결과확인서 양식에 따라 표시 위치가 일부 다를 수 있습니다.</p></div></article>' +
-      '<section class="pay" aria-label="표시된 문장 다듬기"><div class="pay-h"><span class="eyebrow">표시된 문장만 다듬기</span><h3>표시된 영역 ' + regCount(ck.spans) + '곳만 골라 휴머나이징</h3>' +
-      '<p>글 전체가 아니라 결과확인서에 표시된 ' + CH.n(chars) + '자만 다듬어 토큰을 아낍니다. 다듬은 문장은 원문과 나란히 보여 드려 한글 파일에 바로 옮길 수 있습니다.</p></div>' +
-      '<div class="pay-opts"><div class="pay-opt rec"><h4>표시 문장 휴머나이징 <span class="badge">추천</span></h4><p class="cost"><b>' + CH.tk(cost) + '토큰</b> · ' + CH.won(cost) + '</p>' +
-      '<ul><li>표시된 문장만 사람 말투로 다듬기</li><li>원문 · 다듬은 문장 대조표</li><li>전체 글에 반영한 워드 파일</li></ul>' +
-      '<button class="btn btn-p btn-block" type="button" data-act="ckhum">' + (CH.pass.code ? '표시된 문장 다듬기' : '토큰 충전하고 다듬기') + '</button><button class="btn btn-t btn-s" type="button" data-act="cktaste">첫 곳만 먼저 다듬어 보기</button></div>' +
+      '<section class="pay" aria-label="표시된 문장 다듬기"><div class="pay-h"><span class="eyebrow">표시된 문장만 다듬기</span><h3>표시된 영역 ' + nreg + '곳만 골라 휴머나이징</h3>' +
+      '<p>글 전체가 아니라 결과확인서에 표시된 ' + CH.n(chars) + '자만 다듬어 토큰을 아낍니다. 다듬은 문장은 원문과 나란히 보여 드려 한글 파일에 바로 옮길 수 있고, 다듬은 글은 같은 기준으로 다시 검사해 전후를 비교합니다.</p></div>' +
+      '<div class="pay-opts"><div class="pay-opt rec"><h4>표시 영역 모두 휴머나이징 <span class="badge">추천</span></h4><p class="cost"><b>' + CH.tk(cost) + '토큰</b> · ' + CH.won(cost) + '</p>' +
+      '<ul><li>표시된 ' + nreg + '곳 ' + CH.n(chars) + '자를 사람 말투로</li><li>숫자 · 이름 · 인용 · 각주 자리는 그대로</li><li>원문 · 다듬은 문장 대조표와 반영한 워드 파일</li></ul>' +
+      '<button class="btn btn-p btn-block" type="button" data-act="ckhum">' + (hasPass ? '표시된 문장 모두 다듬기' : '토큰 충전하고 다듬기') + '</button><button class="btn btn-t btn-s" type="button" data-act="cktaste">첫 곳은 무료로 먼저 보기</button></div>' +
       '<div class="pay-opt"><h4>카피휴먼 엔진으로 다시 검사</h4><p class="cost">문장마다 AI 점수를 다시 매겨 봅니다.</p><ul><li>결과확인서 본문으로 바로 검사</li><li>AI 문체 특성과 구간 비중</li></ul><button class="btn btn-g btn-block" type="button" data-act="ckcheck">이 본문으로 검사하기</button></div></div>' +
       '<div class="pay-foot"><span>토큰 코드가 있으신가요? <button class="btn btn-t btn-s" type="button" data-act="code">코드 넣기</button></span><span>논문 전체를 맡기려면 <a href="' + CH.url('expert') + '">전문가 휴머나이징</a></span></div></section>';
   }
@@ -201,7 +262,7 @@
   }
   /* 검사 중 화면: 넣은 글 위로 훑는 선이 지나가고, 엔진이 하는 일을 차례로 표시(단계는 시간에 맞춰 넘어가며 마지막 단계에서 결과를 기다림) */
   var STEPS = {
-    check: ['문장 나누기', '문장마다 앞뒤 문장과 함께 AI 글 패턴 살피기', '공개한 판정 기준으로 위험 · 주의 · 양호 판정'],
+    check: ['문장 나누기', 'AI 패턴 DB 89억 개와 문장마다 대조하기', '공개한 판정 기준으로 위험 · 주의 · 양호 판정'],
     hum: ['AI 문체로 읽히는 표현 찾기', '같은 뜻의 사람 말투로 바꾸기', '숫자 · 이름 · 인용 · 말투가 그대로인지 확인']
   };
   function progHtml(label, i, n, note, kind, src) {
@@ -296,6 +357,22 @@
       var isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
       var p = isPdf && CKP ? CKP.fromFile(f, CH.root).catch(function () { return null; }) : Promise.resolve(null);
       p.then(function (ck) {
+        if (ck && !ck.ok && ck.kind === 'plagiarism') {
+          setChip('<div class="file-chip warn">' + ico('alert') + '<b>표절검사 결과확인서 · ' + esc(f.name) + '</b><span class="small">표절률' + (ck.rate != null ? ' ' + ck.rate + '%' : '') + ' · AI작성률 결과가 아님</span><button type="button" aria-label="파일 빼기">빼기</button></div>');
+          say('표절검사 결과확인서입니다. 카피휴먼은 AI생성검사 결과확인서의 AI작성률과 표시 문장을 읽습니다. 카피킬러에서 AI생성검사 결과를 상세보기로 발급한 PDF를 올려 주세요.');
+          if (fileIn) fileIn.value = '';
+          return;
+        }
+        if (ck && !ck.ok && ck.kind === 'copykiller') {
+          var s0 = ck.summary || {};
+          setChip('<div class="file-chip warn">' + ico('alert') + '<b>AI생성검사 결과확인서 · ' + esc(f.name) + '</b><span class="small">' + (s0.rate != null ? 'AI작성률 ' + s0.rate + '% · ' : '') + '표시 문장을 읽지 못함</span><button type="button" aria-label="파일 빼기">빼기</button></div>');
+          say('AI생성검사 결과확인서지만 표시된 문장을 읽지 못했습니다. 발급형태를 상세보기로 해서 다시 내려받은 PDF를 올리거나, 글을 직접 붙여 넣어 주세요.');
+          if (fileIn) fileIn.value = '';
+          return;
+        }
+        if (ck && !ck.ok && ck.kind === 'other') {
+          setChip(''); say('카피킬러 문서지만 AI생성검사 결과확인서가 아닙니다. AI생성검사 상세 결과확인서 PDF를 올려 주세요.'); if (fileIn) fileIn.value = ''; return;
+        }
         if (ck && ck.ok) {
           S.ck = ck; S.src = null; S.docName = (ck.summary && ck.summary.docName) || f.name;
           try { var keep = { kind: ck.kind, summary: ck.summary, text: ck.text, spans: ck.spans, regions: ck.regions, ok: true }; if (JSON.stringify(keep).length < 2000000) CH.ssset('ch_ck', keep); } catch (eK) { /* 저장 없이 */ }
@@ -448,31 +525,36 @@
         var box2 = document.createElement('article'); box2.className = 'rep';
         box2.innerHTML = '<header class="rep-h"><div><small>' + esc(label || '첫 문단 미리보기') + '</small><h3>이렇게 다듬어집니다</h3></div><dl class="rep-meta"><dt>바꾼 곳</dt><dd>' + CH.n(r.changes || 0) + '</dd><dt>엔진</dt><dd>' + (r.engine === 'lite' ? 'CH-Lite' : 'HUM 1.1') + '</dd></dl></header>' +
           '<div class="rep-sec"><div class="pairs"><div class="pair"><div><small>원문</small>' + esc(r.src || first) + '</div><div><small>다듬은 문장</small>' + diffHtml(r.src || first, r.text || '') + '</div></div></div>' +
-          '<p class="fine">' + (r.engine === 'lite' ? '간이 엔진 미리보기입니다. 실제 휴머나이징은 서버 엔진(HUM)이 글 전체를 문장마다 확인하며 다듬습니다.' : '무료 미리보기는 첫 문단만 다듬어 보여 드립니다.') + '</p>' +
-          '<div class="acts"><button class="btn btn-p" type="button" data-act="' + (S.ck && label ? 'ckhum' : 'hum') + '">' + (S.ck && label ? '표시된 문장 모두 다듬기' : '글 전체 휴머나이징') + '</button></div></div>';
+          '<p class="fine">' + (r.engine === 'lite' ? '간이 엔진 미리보기입니다. 실제 휴머나이징은 서버 엔진(HUM)이 글 전체를 문장마다 확인하며 다듬습니다.' : '무료 미리보기는 첫 문단만 다듬어 보여 드립니다. 무엇을 왜 바꿨는지는 전체 결과에서 문장마다 보입니다.') + '</p>' +
+          '<div class="acts"><button class="btn btn-p" type="button" data-act="' + (S.ck && label ? 'ckhum' : 'hum') + '">' + (S.ck && label ? '표시된 문장 모두 다듬기 · ' + CH.tk(CH.costParts('pro', spanParts(S.ck.spans).map(function (q) { return q.text; }))) + '토큰' : '글 전체 휴머나이징 · ' + CH.tk(CH.costParts('pro', chunk(t).parts)) + '토큰(' + CH.won(CH.costParts('pro', chunk(t).parts)) + ')') + '</button></div></div>';
         var anchor = $('.pay', out);
         if (anchor) out.insertBefore(box2, anchor); else out.appendChild(box2);
         bindOut(box2); box2.classList.add('pop'); if (CH.sweep) $$('.s-new', box2).length && $$('.pair > div:last-child', box2).forEach(function (d) { CH.sweep(d, 450); }); box2.scrollIntoView({ block: 'start', behavior: 'smooth' });
       }).catch(fail).then(function () { busy(false); });
     }
     /* 결과확인서에 표시된 문장만(토큰) */
-    function ckHumanize() {
+    function ckHumanize(sel) {
       var ck = S.ck; if (!ck || !ck.spans.length) return;
-      var parts = spanParts(ck.spans), need = CH.costParts('pro', parts.map(function (p) { return p.text; }));
-      gate(need, '표시 문장 휴머나이징', function () {
-        busy(true); show(progHtml('표시된 문장 다듬는 중', 0, parts.length, '결과확인서에 표시된 문장만 사람 말투로 바꿉니다. 숫자 · 이름 · 인용은 그대로 둡니다.', 'hum', ck.spans.map(function (sp) { return sp.t; }).join(' '))); toOut();
-        var newT = ck.spans.map(function (sp) { return sp.t; });
+      sel = sel && sel.length ? sel : null;
+      var spans = ckSpansOf(ck, sel), parts = spanParts(spans), need = CH.costParts('pro', parts.map(function (p) { return p.text; }));
+      S.ckSel = sel; CH.ssset('ch_cksel', sel);
+      var label = sel ? '표시 영역 ' + regCount(spans) + '곳 휴머나이징' : '표시 문장 휴머나이징';
+      gate(need, label, function () {
+        busy(true); show(progHtml('표시된 문장 다듬는 중', 0, parts.length, '결과확인서에 표시된 문장만 사람 말투로 바꿉니다. 숫자 · 이름 · 인용은 그대로 둡니다.', 'hum', spans.map(function (sp) { return sp.t; }).join(' '))); toOut();
+          var newT = spans.map(function (sp) { return sp.t; });
         seq(parts, function (pt, i) {
           return CH.call('am.humanize', { text: pt.text, tone: 'auto', variant: 0, pass: CH.pass.code }, 150000).then(function (r) {
             var outs = String(r.text || '').split(/\n{2,}/);
             if (outs.length === pt.idx.length) { pt.idx.forEach(function (k, j) { newT[k] = outs[j].trim(); }); return; }
-            return seq(pt.idx, function (k) { return CH.call('am.humanize', { text: ck.spans[k].t, tone: 'auto', variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { newT[k] = (r2.text || ck.spans[k].t).trim(); }); });
-          }).then(function () { show(progHtml('표시된 문장 다듬는 중', i + 1, parts.length, '', 'hum', ck.spans.map(function (sp) { return sp.t; }).join(' '))); });
+            return seq(pt.idx, function (k) { return CH.call('am.humanize', { text: spans[k].t, tone: 'auto', variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { newT[k] = (r2.text || spans[k].t).trim(); }); });
+          }).then(function () { show(progHtml('표시된 문장 다듬는 중', i + 1, parts.length, '', 'hum', spans.map(function (sp) { return sp.t; }).join(' '))); });
         }).then(function () {
           var text = ck.text, pairs = [];
-          for (var k = ck.spans.length - 1; k >= 0; k--) { var sp = ck.spans[k]; text = text.slice(0, sp.s) + newT[k] + text.slice(sp.e); }
-          ck.spans.forEach(function (sp, k) { pairs.push({ lv: sp.lv, a: sp.t, b: newT[k], rg: sp.rg }); });
-          S.hum = { src: ck.text, text: text, changed: pairs.filter(function (p) { return p.a !== p.b; }).length, pairs: pairs };
+          for (var k = spans.length - 1; k >= 0; k--) { var sp = spans[k]; text = text.slice(0, sp.s) + newT[k] + text.slice(sp.e); }
+          spans.forEach(function (sp, k) { pairs.push({ lv: sp.lv, a: sp.t, b: newT[k], rg: sp.rg }); });
+          var done = {}; spans.forEach(function (sp) { done[sp.rg] = 1; });
+          var rest = ckRegions(ck).filter(function (r) { return !done[r.rg]; });
+          S.hum = { src: ck.text, text: text, changed: pairs.filter(function (p) { return p.a !== p.b; }).length, pairs: pairs, rest: rest, ck: ck };
           setStep(3); CH.pass.refresh().then(CH.paintChip);
           show(ckHumHtml(S.hum)); bindOut();
         }).catch(fail).then(function () { busy(false); });
@@ -480,12 +562,20 @@
     }
     function ckHumHtml(res) {
       var LVK = { hi: '높음', mid: '중간', low: '낮음' };
-      return '<article class="rep"><header class="rep-h"><div><small>표시된 문장 휴머나이징</small><h3>원문 · 다듬은 문장 대조표</h3></div><dl class="rep-meta"><dt>표시 영역</dt><dd>' + regCount(res.pairs) + '곳</dd><dt>바꾼 곳</dt><dd>' + res.changed + '곳</dd></dl></header>' +
+      var restHtml = '';
+      if (res.rest && res.rest.length && res.ck) {
+        var rs = res.rest.reduce(function (a, r) { return a + r.chars; }, 0), rsel = res.rest.map(function (r) { return r.rg; }), rtok = ckCost(res.ck, rsel);
+        var S0 = res.ck.summary || {}, tot = ckRegions(res.ck).reduce(function (a, r) { return a + r.chars; }, 0);
+        var est = S0.rate != null && tot ? Math.round(S0.rate * rs / tot) : null;
+        restHtml = '<section class="pay"><div class="pay-h"><span class="eyebrow">남은 표시 영역</span><h3>아직 ' + res.rest.length + '곳 · ' + CH.n(rs) + '자가 표시된 채 남아 있습니다</h3><p>' + (est != null ? '남은 영역만으로도 예상 AI작성률은 ' + est + '%입니다. ' : '') + '지금 이어서 다듬으면 ' + CH.tk(rtok) + '토큰(' + CH.won(rtok) + ')이 빠집니다.</p></div>' +
+          '<div class="acts"><button class="btn btn-p" type="button" data-act="ckplan" data-rg="' + rsel.join(',') + '">남은 ' + res.rest.length + '곳 마저 다듬기</button></div></section>';
+      }
+      return '<article class="rep"><header class="rep-h"><div><small>표시된 문장 휴머나이징</small><h3>원문 · 다듬은 문장 대조표</h3></div><dl class="rep-meta"><dt>다듬은 영역</dt><dd>' + regCount(res.pairs) + '곳</dd><dt>바꾼 곳</dt><dd>' + res.changed + '곳</dd></dl></header>' +
         '<div class="rep-sec"><div class="seg-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" data-tab="pairs">대조표</button><button type="button" role="tab" aria-selected="false" data-tab="full">반영한 전체 글</button></div>' +
         '<div data-pane="pairs" class="pairs">' + res.pairs.map(function (p, i) { return '<div class="pair"><div><small>' + (i + 1) + ' · ' + LVK[p.lv] + ' · 원문</small>' + esc(p.a) + '</div><div><small>다듬은 문장</small>' + diffHtml(p.a, p.b) + '</div></div>'; }).join('') + '</div>' +
         '<div data-pane="full" hidden><div class="doc" tabindex="0">' + diffHtml(res.src, res.text) + '</div></div>' +
         '<div class="acts"><button class="btn btn-p" type="button" data-act="copypairs">대조표 복사</button><button class="btn btn-g" type="button" data-act="copy">전체 글 복사</button><button class="btn btn-g" type="button" data-act="docx">' + ico('down') + '워드 파일로 받기</button><button class="btn btn-g" type="button" data-act="again">다듬은 글로 다시 검사</button></div>' +
-        '<p class="fine">한글(HWP) 원본에는 대조표를 보며 같은 문장을 바꿔 넣으세요. 다듬은 결과는 엔진 기준의 추정이며 카피킬러 등 다른 검사기의 결과를 보장하지 않습니다.</p></div></article>';
+        '<p class="fine">한글(HWP) 원본에는 대조표를 보며 같은 문장을 바꿔 넣으세요. 다듬은 결과는 엔진 기준의 추정이며 카피킬러 등 다른 검사기의 결과를 보장하지 않습니다.</p></div></article>' + restHtml;
     }
 
     /* 결과 영역의 단추 */
@@ -500,6 +590,7 @@
           else if (a === 'code') CH.buy({ focusCode: true, title: '토큰 코드 넣기' });
           else if (a === 'recheck') run();
           else if (a === 'ckhum') ckHumanize();
+          else if (a === 'ckplan') ckHumanize(String(b.getAttribute('data-rg') || '').split(',').filter(Boolean).map(Number));
           else if (a === 'cktaste') { if (S.ck && S.ck.spans.length) taste(S.ck.spans[0].t, '표시된 첫 곳 미리보기'); }
           else if (a === 'ckcheck') run({ keepCk: true });
           else if (a === 'copy') { if (S.hum) CH.copy(S.hum.text); }
@@ -532,7 +623,7 @@
       if (!res || !res.ok || !res.intent) return;
       if (res.intent === 'ckhum' && !S.ck) { var ck = CH.ssget('ch_ck'); if (ck && ck.spans && ck.spans.length) { S.ck = ck; S.docName = (ck.summary && ck.summary.docName) || S.docName; ta.value = ck.text; count(); setStep(2); } }
       S.skipAsk = true;
-      if (res.intent === 'full') fullCheck(); else if (res.intent === 'hum') humanize(); else if (res.intent === 'ckhum' && S.ck) ckHumanize(); else S.skipAsk = false;
+      if (res.intent === 'full') fullCheck(); else if (res.intent === 'hum') humanize(); else if (res.intent === 'ckhum' && S.ck) ckHumanize(CH.ssget('ch_cksel')); else S.skipAsk = false;
     });
     runB.addEventListener('click', function () { run(); });
     ta.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(); } });
