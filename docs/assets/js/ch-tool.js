@@ -212,10 +212,10 @@
   function planTable(rows, opt) {
     opt = opt || {};
     if (!rows.length) return '';
-    return '<div class="tbl-wrap plan-wrap"><table class="plan-t"><thead><tr><th scope="col">목표</th><th scope="col">다듬을 분량</th><th scope="col">예상 AI 작성률</th><th scope="col">토큰 · 비용</th><th scope="col">카피휴먼</th><th scope="col">직접 고치면</th><th scope="col"></th></tr></thead><tbody>' +
+    return '<div class="tbl-wrap plan-wrap"><table class="plan-t"><thead><tr><th scope="col">목표</th><th scope="col">다듬을 분량</th><th scope="col">예상 AI 작성률</th><th scope="col">토큰</th><th scope="col">카피휴먼</th><th scope="col">직접 고치면</th><th scope="col"></th></tr></thead><tbody>' +
       rows.map(function (r, i) {
         var act = opt.act || 'plan', val = opt.val ? opt.val(r) : String(r.target), last = i === rows.length - 1;
-        return '<tr' + (last ? ' class="all"' : '') + '><td class="tg" data-th="목표"><b>' + (r.target ? r.target + '% 미만' : (opt.allLabel || 'AI 패턴 문장 모두')) + '</b></td><td data-th="다듬을 분량">' + (opt.amount ? opt.amount(r) : '문장 ' + r.n + '개 · ' + CH.n(r.need) + '자') + '</td><td class="est" data-th="예상 AI 작성률"><b class="' + (r.est >= 40 ? 'c-hi' : r.est >= 20 ? 'c-mid' : 'c-ok') + '">' + r.est + '%</b><small>' + (r.est >= 40 ? '부적합' : r.est >= 20 ? '고위험' : '안전') + '</small></td><td class="n" data-th="토큰 · 비용"><b>' + CH.tk(r.tok) + '토큰</b> · ' + CH.won(r.tok) + (r.unit ? '<small class="muted"> · 전체 결과 포함</small>' : '') + '</td><td data-th="카피휴먼">약 ' + r.min + '분</td><td data-th="직접 고치면">' + r.hour + '</td>' +
+        return '<tr' + (last ? ' class="all"' : '') + '><td class="tg" data-th="목표"><b>' + (r.target ? r.target + '% 미만' : (opt.allLabel || 'AI 패턴 문장 모두')) + '</b></td><td data-th="다듬을 분량">' + (opt.amount ? opt.amount(r) : '문장 ' + r.n + '개 · ' + CH.n(r.need) + '자') + '</td><td class="est" data-th="예상 AI 작성률"><b class="' + (r.est >= 40 ? 'c-hi' : r.est >= 20 ? 'c-mid' : 'c-ok') + '">' + r.est + '%</b><small>' + (r.est >= 40 ? '부적합' : r.est >= 20 ? '고위험' : '안전') + '</small></td><td class="n" data-th="토큰"><b>' + CH.tk(r.tok) + '토큰</b>' + (r.unit ? '<small class="muted"> · 전체 결과 포함</small>' : '') + '</td><td data-th="카피휴먼">약 ' + r.min + '분</td><td data-th="직접 고치면">' + r.hour + '</td>' +
           '<td class="act"><button class="btn btn-s ' + (last ? 'btn-p' : 'btn-g') + '" type="button" data-act="' + act + '" data-v="' + esc(val) + '">' + (r.target ? r.target + '% 미만으로' : (opt.allBtn || '모두 다듬기')) + '</button></td></tr>';
       }).join('') + '</tbody></table></div>';
   }
@@ -230,10 +230,10 @@
     var sub = risky ? '목표를 고르면 AI 점수가 높은 문장부터 필요한 만큼만 사람 말투로 바꾸고, 같은 기준으로 다시 검사합니다. 뜻 · 숫자 · 인용은 그대로.' : '다른 검사기에서는 더 높게 나올 수 있습니다. 지금 다듬어 두면 어디서든 여유가 생깁니다.';
     return '<section class="pay" aria-label="다음 단계">' +
       '<div class="pay-h"><span class="eyebrow">목표를 고르면 바로 다듬습니다</span><h3>' + head + '</h3>' +
-      '<p>' + sub + ' 이 글 ' + CH.n(t.length) + '자 기준, 1토큰 100원.</p></div>' +
+      '<p>' + sub + ' 이 글 ' + CH.n(t.length) + '자 기준.</p></div>' +
       (rows.length ? planTable(rows) + planNote() : '') +
       '<div class="pay-opts">' +
-      '<div class="pay-opt"><h4>전체 결과만 먼저 보기</h4><p class="cost"><b>' + CH.tk(det) + '토큰</b> · ' + (det > 0 ? CH.won(det) : '600자 이하는 토큰 없이') + '</p>' +
+      '<div class="pay-opt"><h4>전체 결과만 먼저 보기</h4><p class="cost"><b>' + CH.tk(det) + '토큰</b>' + (det > 0 ? '' : ' · 600자 이하는 토큰 없이') + '</p>' +
       '<ul><li>AI 패턴 문장 ' + N.aiN + '개 전부의 위치와 AI 점수</li><li>표현별 AI 패턴과 바꿀 말</li></ul>' +
       '<button class="btn btn-g btn-block" type="button" data-act="full">' + (hasPass ? '전체 결과 열기' : '토큰 충전하고 전체 결과 보기') + '</button></div>' +
       '<div class="pay-opt"><h4>어떻게 바뀌는지 먼저 보기</h4><p class="cost"><b>무료</b> · 첫 문단만</p>' +
@@ -295,7 +295,7 @@
     var planHtml = plan.length ? '<div class="rep-sec"><h4>목표를 고르면 바로 다듬습니다 <span class="cnt">큰 영역부터</span></h4>' +
       planTable(plan, { act: 'ckplan', val: function (r) { return r.sel.join(','); }, amount: function (r) { return r.n + '곳 · ' + CH.n(r.chars) + '자'; }, allLabel: '표시 영역 모두' }) +
       '<p class="fine">예상 수치는 다듬은 영역이 다시 잡히지 않을 때의 산술값이며 카피킬러 재검사를 보장하지 않습니다. 직접 고치는 시간은 1,000자당 ' + hourStr(+CFG.manualHour || 1.5) + '으로 잡은 추정입니다.</p></div>' : '';
-    var allCard = plan.length ? '' : '<div class="pay-opt rec"><h4>표시 영역 모두 휴머나이징</h4><p class="cost"><b>' + CH.tk(cost) + '토큰</b> · ' + CH.won(cost) + '</p>' +
+    var allCard = plan.length ? '' : '<div class="pay-opt rec"><h4>표시 영역 모두 휴머나이징</h4><p class="cost"><b>' + CH.tk(cost) + '토큰</b></p>' +
       '<ul><li>표시된 ' + nreg + '곳 ' + CH.n(chars) + '자를 사람 말투로</li><li>숫자 · 이름 · 인용은 그대로</li></ul>' +
       '<button class="btn btn-p btn-block" type="button" data-act="ckhum">' + (hasPass ? '표시된 문장 모두 다듬기' : '토큰 충전하고 다듬기') + '</button></div>';
     return '<article class="rep" aria-label="AI생성검사 결과확인서 불러오기">' +
@@ -606,7 +606,7 @@
       return CH.costParts('unit', C.parts) * 2 + CH.costParts('pro', C.parts);
     }
     function needLine(need, name) {
-      return need > 0 ? '이 글 ' + esc(name) + ': <b>' + CH.tk(need) + '토큰</b> · ' + CH.won(need) : '600자 이하 글의 ' + esc(name) + '는 토큰이 빠지지 않습니다. 토큰 코드만 있으면 바로 열립니다.';
+      return need > 0 ? '이 글 ' + esc(name) + ': <b>' + CH.tk(need) + '토큰</b>' : '600자 이하 글의 ' + esc(name) + '는 토큰이 빠지지 않습니다. 토큰 코드만 있으면 바로 열립니다.';
     }
     function gate(need, name, go, intent) {
       var rn = Math.max(need, journey());
@@ -630,7 +630,7 @@
     function askGo(need, name, go) {
       if (need < 10 || S.skipAsk) { S.skipAsk = false; go(); return; }
       var el = document.createElement('div'); el.className = 'notice'; el.setAttribute('role', 'alertdialog');
-      el.innerHTML = '<p><b>' + esc(name) + '에 ' + CH.tk(need) + '토큰(' + CH.won(need) + ')이 빠집니다.</b>' + (CH.pass.left() != null ? ' 남은 토큰은 ' + CH.tk(CH.pass.left()) + '개입니다.' : '') + '</p><div class="acts" style="margin-top:10px"><button class="btn btn-p btn-s" type="button" data-yes>' + esc(name) + ' 시작</button><button class="btn btn-g btn-s" type="button" data-no>취소</button></div>';
+      el.innerHTML = '<p><b>' + esc(name) + '에 ' + CH.tk(need) + '토큰이 빠집니다.</b>' + (CH.pass.left() != null ? ' 남은 토큰은 ' + CH.tk(CH.pass.left()) + '개입니다.' : '') + '</p><div class="acts" style="margin-top:10px"><button class="btn btn-p btn-s" type="button" data-yes>' + esc(name) + ' 시작</button><button class="btn btn-g btn-s" type="button" data-no>취소</button></div>';
       out.insertBefore(el, out.firstChild); el.scrollIntoView({ block: 'center', behavior: 'smooth' });
       $('[data-yes]', el).addEventListener('click', function () { el.remove(); go(); });
       $('[data-no]', el).addEventListener('click', function () { el.remove(); });
@@ -683,7 +683,7 @@
         box2.innerHTML = '<header class="rep-h"><div><small>' + esc(label || '첫 문단 미리보기') + '</small><h3>이렇게 다듬어집니다</h3></div><dl class="rep-meta"><dt>바꾼 곳</dt><dd>' + CH.n(r.changes || 0) + '</dd>' + (r.taste && r.taste.before != null ? '<dt>AI 작성률</dt><dd>' + r.taste.before + '% → ' + r.taste.after + '%</dd>' : '') + '<dt>엔진</dt><dd>' + (r.engine === 'lite' ? 'CH-Lite' : 'HUM ' + engV(r.hum, '1.4')) + '</dd></dl></header>' +
           '<div class="rep-sec"><div class="pairs"><div class="pair"><div><small>원문</small>' + esc(r.src || first) + '</div><div><small>다듬은 문장</small>' + diffHtml(r.src || first, r.text || '') + '</div></div></div>' +
           '<p class="fine">' + (r.engine === 'lite' ? '간이 엔진 미리보기입니다. 실제 휴머나이징은 서버 엔진(HUM)이 글 전체를 문장마다 확인하며 다듬습니다.' : '무료 미리보기는 첫 문단만 다듬어 보여 드립니다.' + (r.taste && r.taste.before != null ? ' 같은 판정 기준으로 다시 재면 이 문단의 AI 작성률이 ' + r.taste.before + '%에서 ' + r.taste.after + '%가 됩니다.' : '') + ' 무엇을 왜 바꿨는지는 전체 결과에서 문장마다 보입니다.') + '</p>' +
-          '<div class="acts"><button class="btn btn-p" type="button" data-act="' + (S.ck && label ? 'ckhum' : 'hum') + '">' + (S.ck && label ? '표시된 문장 모두 다듬기 · ' + CH.tk(CH.costParts('pro', spanParts(S.ck.spans).map(function (q) { return q.text; }))) + '토큰' : '글 전체 휴머나이징 · ' + CH.tk(CH.costParts('pro', chunk(t).parts)) + '토큰(' + CH.won(CH.costParts('pro', chunk(t).parts)) + ')') + '</button></div></div>';
+          '<div class="acts"><button class="btn btn-p" type="button" data-act="' + (S.ck && label ? 'ckhum' : 'hum') + '">' + (S.ck && label ? '표시된 문장 모두 다듬기 · ' + CH.tk(CH.costParts('pro', spanParts(S.ck.spans).map(function (q) { return q.text; }))) + '토큰' : '글 전체 휴머나이징 · ' + CH.tk(CH.costParts('pro', chunk(t).parts)) + '토큰') + '</button></div></div>';
         var anchor = $('.pay', out);
         if (anchor) out.insertBefore(box2, anchor); else out.appendChild(box2);
         bindOut(box2); box2.classList.add('pop'); if (CH.sweep) $$('.s-new', box2).length && $$('.pair > div:last-child', box2).forEach(function (d) { CH.sweep(d, 450); }); box2.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -724,7 +724,7 @@
         var rs = res.rest.reduce(function (a, r) { return a + r.chars; }, 0), rsel = res.rest.map(function (r) { return r.rg; }), rtok = ckCost(res.ck, rsel);
         var S0 = res.ck.summary || {}, tot = ckRegions(res.ck).reduce(function (a, r) { return a + r.chars; }, 0);
         var est = S0.rate != null && tot ? Math.round(S0.rate * rs / tot) : null;
-        restHtml = '<section class="pay"><div class="pay-h"><span class="eyebrow">남은 표시 영역</span><h3>아직 ' + res.rest.length + '곳 · ' + CH.n(rs) + '자가 표시된 채 남아 있습니다</h3><p>' + (est != null ? '남은 영역만으로도 예상 AI작성률은 ' + est + '%입니다. ' : '') + '지금 이어서 다듬으면 ' + CH.tk(rtok) + '토큰(' + CH.won(rtok) + ')이 빠집니다.</p></div>' +
+        restHtml = '<section class="pay"><div class="pay-h"><span class="eyebrow">남은 표시 영역</span><h3>아직 ' + res.rest.length + '곳 · ' + CH.n(rs) + '자가 표시된 채 남아 있습니다</h3><p>' + (est != null ? '남은 영역만으로도 예상 AI작성률은 ' + est + '%입니다. ' : '') + '지금 이어서 다듬으면 ' + CH.tk(rtok) + '토큰이 빠집니다.</p></div>' +
           '<div class="acts"><button class="btn btn-p" type="button" data-act="ckplan" data-rg="' + rsel.join(',') + '">남은 ' + res.rest.length + '곳 마저 다듬기</button></div></section>';
       }
       return '<article class="rep"><header class="rep-h"><div><small>표시된 문장 휴머나이징</small><h3>원문 · 다듬은 문장 대조표</h3></div><dl class="rep-meta"><dt>다듬은 영역</dt><dd>' + regCount(res.pairs) + '곳</dd><dt>바꾼 곳</dt><dd>' + res.changed + '곳</dd></dl></header>' +

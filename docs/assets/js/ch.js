@@ -12,7 +12,6 @@
   CH.esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   CH.n = function (x) { return Number(x || 0).toLocaleString('ko-KR'); };
   CH.tk = function (x) { return (Math.round((+x || 0) * 10) / 10).toLocaleString('ko-KR', { maximumFractionDigits: 1 }); };
-  CH.won = function (tok) { return CH.n(Math.round((+tok || 0) * (CFG.tokWon || 100))) + '원'; };
   CH.sget = function (k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
   CH.sset = function (k, v) { try { if (v == null || v === '') localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* 저장 없이 */ } };
   CH.ssget = function (k) { try { return JSON.parse(sessionStorage.getItem(k) || 'null'); } catch (e) { return null; } };
@@ -171,13 +170,13 @@
     if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
     else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
   }
-  var REFUND = '토큰 유효기간은 충전일부터 5년입니다. 코드 발송 전에는 전액 취소되고, 발송 뒤에는 쓴 토큰 · 받은 결과 · 보너스 토큰은 환불되지 않습니다(쓰지 않은 유료 토큰은 이용약관 기준).';
+  var REFUND = '토큰 유효기간은 충전일부터 5년입니다. 코드 발송 전에는 전액 취소되고, 발송 뒤에는 쓴 토큰과 받은 결과는 환불되지 않습니다(쓰지 않은 토큰은 이용약관 기준).';
   /* opt: { need, recNeed, needText, title, focusCode, pick, intent, done(pass) } */
   CH.buy = function (opt) {
     opt = opt || {};
     close();
     lastFocus = document.activeElement; onDone = opt.done || null;
-    var direct = CH.payReady(), list = packs(), t0 = Date.now();
+    var direct = CH.payReady(), list = packs(), t0 = Date.now(), need = Math.max(0, +opt.need || 0);
     var rec = (opt.pick && list.filter(function (x) { return x.id === opt.pick; })[0]) || recPack(opt.recNeed || opt.need || 0, list);
     var mail0 = CH.sget('ch_mail'), tail = P.code ? P.norm(P.code).slice(-4) : '';
     box = document.createElement('div');
@@ -197,16 +196,21 @@
       '</div>' :
       '<a class="btn btn-p btn-lg btn-block" data-go target="_blank" rel="noopener" href="#"></a>' +
       '<div class="flow2">' + CH.ico('lock') + '<b>성균관컨설팅 안전결제</b><span>회원가입 없이 · 카드 · 토스페이 · 계좌이체</span></div>' +
-      '<p class="fine">결제는 카피휴먼 운영사 <b>성균관컨설팅</b>의 결제 페이지에서 합니다. 결제가 확인되면 바로(보통 5분 안) 주문서의 이메일로 <b>16자리 토큰 코드</b>가 갑니다(보내는 이름 ‘카피휴먼’). 메일이 안 보이면 스팸함도 확인해 주세요. 영수증과 카드 명세서에는 운영사 성균관컨설팅으로 표시됩니다.</p>';
+      '<ol class="buy-steps"><li><b>결제</b><span>새 창의 성균관컨설팅 결제 페이지</span></li><li><b>메일로 코드</b><span>보통 5분 안, 보내는 이름 ‘카피휴먼’</span></li><li><b>코드 넣기</b><span>아래 칸에 넣으면 바로 이어서</span></li></ol>' +
+      '<p class="fine">결제는 카피휴먼 운영사 <b>성균관컨설팅</b>의 결제 페이지에서 합니다. 결제가 확인되면 주문서의 이메일로 <b>16자리 토큰 코드</b>가 갑니다. 메일이 안 보이면 스팸함도 확인해 주세요. 영수증과 카드 명세서에는 성균관컨설팅으로 표시됩니다.</p>';
     box.innerHTML = '<div class="modal-in"><button class="modal-x" type="button" aria-label="닫기">×</button>' +
-      '<div class="stack"><span class="eyebrow">토큰 충전</span><h2 id="buyT">' + CH.esc(opt.title || '필요한 만큼만 충전하세요') + '</h2>' +
-      '<p class="muted small">1토큰 = ' + CH.n(CFG.tokWon || 100) + '원 · 쓴 만큼만 빠지고 남은 토큰은 5년 동안 이어서 씁니다.</p></div>' +
+      '<div class="stack"><span class="eyebrow">토큰 충전</span><h2 id="buyT">' + CH.esc(opt.title || '월 구독 없이, 한 번만 충전하세요') + '</h2>' +
+      '<p class="muted small">충전한 토큰은 쓴 만큼만 빠지고, 남은 토큰은 5년 동안 이어서 씁니다. 많이 충전할수록 토큰당 가격이 낮아집니다.</p></div>' +
       (opt.needText ? '<div class="need">' + opt.needText + '</div>' : '') +
       '<fieldset class="packs" style="border:0;padding:0;margin:0"><legend class="sr">충전할 토큰</legend>' + list.map(function (p) {
-        return '<label class="pk"><input type="radio" name="pk" value="' + p.id + '"' + (p.id === rec.id ? ' checked' : '') + '>' +
-          '<span class="pk-top"><b>' + CH.esc(p.name) + '</b>' + (p.id === rec.id ? '<span class="badge">' + (opt.pick ? '고른 묶음' : opt.need != null || opt.recNeed ? '이 글에 맞음' : '추천') + '</span>' : p.best ? '<span class="badge soft">많이 고름</span>' : '') + '</span>' +
+        var times = need > 0 ? Math.floor(p.tok / need) : 0;
+        return '<label class="pk' + (p.best ? ' best' : '') + (p.top ? ' top' : '') + '"><input type="radio" name="pk" value="' + p.id + '"' + (p.id === rec.id ? ' checked' : '') + '>' +
+          '<span class="pk-top"><b>' + CH.esc(p.name) + '</b>' + (p.badge ? '<span class="badge' + (p.best ? '' : ' soft') + '">' + CH.esc(p.badge) + '</span>' : '') + '</span>' +
           '<span class="pk-tok">' + CH.n(p.tok) + '토큰' + (p.tok > p.base ? '<small>+' + CH.n(p.tok - p.base) + ' 더</small>' : '') + '</span>' +
-          '<span class="pk-price">' + CH.n(p.price) + '원</span><span class="pk-who">' + CH.esc(p.who) + '</span></label>';
+          '<span class="pk-price">' + CH.n(p.price) + '원' + (p.per ? '<small>토큰당 ' + CH.esc(p.per) + '원</small>' : '') + '</span>' +
+          (p.save ? '<span class="pk-save">' + CH.esc(p.refName || '') + ' 대비 토큰당 약 ' + p.save + '% 절약</span>' : '') +
+          '<span class="pk-who">' + CH.esc(p.who) + '</span>' +
+          (times >= 1 && !opt.pick ? '<span class="pk-fit">' + (p.id === rec.id ? CH.ico('check') + '이 글에 맞음 · ' : '') + '이 작업 약 ' + CH.n(times) + '번</span>' : '') + '</label>';
       }).join('') + '</fieldset>' + payPart +
       '<div class="code-box"><label for="codeIn"><b>받은 토큰 코드 넣기</b></label><div class="code-row"><input id="codeIn" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX" value="' + CH.esc(P.code) + '"><button class="btn btn-d" type="button" data-code>코드 넣기</button></div>' +
       '<p class="code-msg" data-code-msg role="status">' + (P.code ? '이 브라우저에 저장된 코드가 있습니다. 남은 토큰을 확인하려면 코드 넣기를 누르세요.' : '코드는 이 브라우저에만 저장됩니다. 다른 기기에서는 코드를 다시 넣어 주세요.') + '</p></div>' + offNote +
@@ -217,8 +221,8 @@
     function cur() { var v = ($('input[name=pk]:checked', box) || {}).value; return list.filter(function (x) { return x.id === v; })[0] || rec; }
     function paint() {
       var p = cur(), go = $('[data-go]', box), pay = $('[data-pay]', box), sh = $('[data-shop]', box);
-      if (go) { go.href = shopUrl(p); go.innerHTML = CH.ico('lock') + '<span>성균관컨설팅에서 ' + CH.n(p.price) + '원 결제하기</span>'; }
-      if (pay) pay.innerHTML = '<span>' + CH.n(p.price) + '원 결제하고 바로 코드 받기</span>';
+      if (go) { go.href = shopUrl(p); go.innerHTML = CH.ico('lock') + '<span><span class="go-pk">' + CH.esc(p.name) + ' ' + CH.n(p.tok) + '토큰 · </span>' + CH.n(p.price) + '원 결제하기</span>'; }
+      if (pay) pay.innerHTML = '<span><span class="go-pk">' + CH.esc(p.name) + ' ' + CH.n(p.tok) + '토큰 · </span>' + CH.n(p.price) + '원 결제하고 바로 코드 받기</span>';
       if (sh) sh.href = shopUrl(p);
     }
     paint();
@@ -329,10 +333,11 @@
     mn.addEventListener('click', function (e) { if (e.target.closest('a')) { mn.classList.remove('on'); mb.setAttribute('aria-expanded', 'false'); document.body.style.overflow = ''; } });
   }
   document.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-tok-chip], [data-open-buy]');
+    var t = e.target.closest('[data-tok-chip], [data-open-buy], [data-open-code]');
     if (!t) return;
     e.preventDefault();
-    CH.buy({ focusCode: t.hasAttribute('data-tok-chip'), title: t.hasAttribute('data-tok-chip') ? '토큰 코드와 충전' : null, pick: t.getAttribute('data-pack') || null });
+    var code = t.hasAttribute('data-tok-chip') || t.hasAttribute('data-open-code');
+    CH.buy({ focusCode: code, title: t.hasAttribute('data-open-code') ? '받은 토큰 코드 넣기' : code ? '토큰 코드와 충전' : null, pick: t.getAttribute('data-pack') || null });
   });
   paintChip();
   if (P.code && document.querySelector('[data-tool]')) P.refresh();
@@ -357,7 +362,7 @@
       lab.textContent = CH.n(n) + '자';
       o.innerHTML = '<div class="row"><span>AI 작성률 전체 결과</span><b>' + (cd.checked ? CH.tk(d) + '토큰' : '빼기') + '</b></div>' +
         '<div class="row"><span>AI 휴머나이징</span><b>' + (ch.checked ? CH.tk(h) + '토큰' : '빼기') + '</b></div>' +
-        '<div class="row sum"><span>합계</span><b>' + CH.tk(s) + '토큰 · ' + CH.won(s) + '</b></div>' +
+        '<div class="row sum"><span>합계</span><b>' + CH.tk(s) + '토큰</b></div>' +
         '<div class="row"><span>맞는 충전</span><b>' + CH.esc(p.name) + ' ' + CH.n(p.tok) + '토큰(' + CH.n(p.price) + '원)</b></div>';
     }
     [r, cd, ch].forEach(function (x) { x.addEventListener('input', paint); x.addEventListener('change', paint); });
