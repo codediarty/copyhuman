@@ -161,7 +161,7 @@
   }
   function engV(v, d) { var m = /^(\d+)\.(\d+)/.exec(String(v || '')); return m ? m[1] + '.' + m[2] : d; }   // 서버 판 '1.3.0' → '1.3'
   function engineLine(N) {
-    return N.engine === 'lite' ? '카피휴먼 간이 엔진 CH-Lite 1.0' : '카피휴먼 판별 엔진 DET ' + engV(N.ver, '1.3') + (N.critName ? ' · ' + esc(N.critName.replace(/^(AIMarker|카피휴먼) 판정 기준/, '판정 기준')) : '');
+    return N.engine === 'lite' ? '카피휴먼 간이 엔진 CH-Lite 1.0' : '카피휴먼 판별 엔진 DET ' + engV(N.ver, '1.2') + (N.critName ? ' · ' + esc(N.critName.replace(/^(AIMarker|카피휴먼) 판정 기준/, '판정 기준')) : '');
   }
   function reportHtml(N, ctx) {
     var b = N.band, k = b.key;
