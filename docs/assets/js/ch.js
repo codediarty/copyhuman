@@ -171,7 +171,7 @@
     if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
     else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
   }
-  var REFUND = '토큰 유효기간은 충전일부터 5년입니다. 구매 후 7일 안에 쓰지 않은 유료 토큰은 전액, 7일이 지나면 남은 유료 토큰 금액에서 10%를 뺀 금액을 환불합니다(보너스 토큰 제외). 이미 받은 결과와 쓴 토큰은 청약철회가 제한됩니다.';
+  var REFUND = '토큰 유효기간은 충전일부터 5년입니다. 코드 발송 전에는 전액 취소되고, 발송 뒤에는 쓴 토큰 · 받은 결과 · 보너스 토큰은 환불되지 않습니다(쓰지 않은 유료 토큰은 이용약관 기준).';
   /* opt: { need, recNeed, needText, title, focusCode, pick, intent, done(pass) } */
   CH.buy = function (opt) {
     opt = opt || {};
@@ -187,7 +187,7 @@
       '<div class="pay-form">' +
         '<label class="fld"><span>코드를 받을 이메일</span><input id="payMail" type="email" inputmode="email" autocomplete="email" spellcheck="false" maxlength="120" placeholder="name@example.com" value="' + CH.esc(mail0) + '"></label>' +
         (P.code ? '<label class="chk"><input id="payTop" type="checkbox" checked><span>지금 쓰는 코드(끝 ' + CH.esc(tail) + ')에 토큰 더하기</span></label>' : '') +
-        '<label class="chk"><input id="payAgree" type="checkbox"><span><b>(필수)</b> 상품과 결제 금액을 확인했고, <a href="' + CH.url('terms') + '" target="_blank" rel="noopener">이용약관</a>과 <a href="' + CH.url('terms') + '#refund" target="_blank" rel="noopener">환불 기준</a>(쓴 토큰 · 받은 결과는 청약철회 제한)에 동의합니다.</span></label>' +
+        '<label class="chk"><input id="payAgree" type="checkbox"><span><b>(필수)</b> 상품과 결제 금액을 확인했고, <a href="' + CH.url('terms') + '#refund" target="_blank" rel="noopener">이용약관</a>(코드 발송 뒤 쓴 토큰 · 받은 결과는 환불 불가)에 동의합니다.</span></label>' +
         '<input id="payHp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">' +
         '<button class="btn btn-p btn-lg btn-block" type="button" data-pay></button>' +
         '<p class="code-msg" data-pay-msg role="status"></p>' +
@@ -210,7 +210,7 @@
       }).join('') + '</fieldset>' + payPart +
       '<div class="code-box"><label for="codeIn"><b>받은 토큰 코드 넣기</b></label><div class="code-row"><input id="codeIn" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX" value="' + CH.esc(P.code) + '"><button class="btn btn-d" type="button" data-code>코드 넣기</button></div>' +
       '<p class="code-msg" data-code-msg role="status">' + (P.code ? '이 브라우저에 저장된 코드가 있습니다. 남은 토큰을 확인하려면 코드 넣기를 누르세요.' : '코드는 이 브라우저에만 저장됩니다. 다른 기기에서는 코드를 다시 넣어 주세요.') + '</p></div>' + offNote +
-      '<p class="fine">' + REFUND + ' 처리하지 못한 요청은 토큰이 빠지지 않습니다. <a href="' + CH.url('terms') + '#refund">환불 기준</a> · 문의 ' + CH.esc(CFG.mail || '') + '</p></div>';
+      '<p class="fine">' + REFUND + ' 처리하지 못한 요청은 토큰이 빠지지 않습니다. <a href="' + CH.url('terms') + '#refund">이용약관</a> · 문의 ' + CH.esc(CFG.mail || '') + '</p></div>';
     document.body.appendChild(box);
     document.body.style.overflow = 'hidden';
     var ci = $('#codeIn', box), cm = $('[data-code-msg]', box);

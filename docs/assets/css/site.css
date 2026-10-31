@@ -168,6 +168,12 @@ h1 em, h2 em { white-space: nowrap; }
 .logo small { font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; color: var(--mut); letter-spacing: .14em; margin-left: 1px; }
 .logo b em { font-style: normal; color: var(--brand); }
 .ft .logo b em { color: #a5a4ff; }
+.logo svg.wm { width: auto; height: 26px; display: block; }
+.wm-c { fill: #373c3e; }
+.wm-h { fill: var(--brand); }
+:root[data-theme="dark"] .wm-c, .ft .wm-c, .night .wm-c { fill: var(--ink); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wm-c { fill: var(--ink); } }
+.ft .logo svg.wm { height: 24px; }
 .nav { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
 .nav a { color: var(--ink2); font-size: 15px; font-weight: 600; padding: 8px 12px; border-radius: 9px; text-decoration: none !important; white-space: nowrap; transition: color .15s, background-color .15s; letter-spacing: -.02em; }
 .nav a:hover { color: var(--ink); background: var(--bg2); }
@@ -192,6 +198,7 @@ h1 em, h2 em { white-space: nowrap; }
 @media (max-width: 520px) {
   .hd-r .btn-check { display: none; }
   .logo small { display: none; }
+  .logo svg.wm { height: 22px; }
   .hd .wrap { gap: 12px; }
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -243,6 +250,9 @@ h1 em, h2 em { white-space: nowrap; }
 .hero.home { padding-block: clamp(48px, 7vw, 112px) 0; }
 .hero.home .wrap { grid-template-columns: minmax(0, .95fr) minmax(0, 1.1fr); grid-template-areas: "copy demo" "strip strip"; grid-template-rows: auto auto; align-items: center; gap: 36px clamp(36px, 5vw, 76px); }
 .hero.home h1 { font-size: clamp(42px, 5.8vw, 78px); line-height: 1.08; letter-spacing: -.052em; max-width: none; }
+.hero.home h1.h1-3 { font-size: clamp(28px, 8.6vw, 54px); line-height: 1.16; }
+@media (min-width: 1181px) { .hero.home h1.h1-3 { font-size: clamp(30px, 3.75vw, 50px); } }
+.hero.home h1.h1-3 span { display: block; white-space: nowrap; }
 .hero.home .lead { max-width: 30em; }
 .hero-pill { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; padding: 5px 14px 5px 5px; border-radius: 99px; background: var(--card); border: 1px solid var(--line2); box-shadow: var(--shadow-sm); color: var(--ink2); font-size: 14px; font-weight: 600; text-decoration: none !important; transition: border-color .2s, color .2s; letter-spacing: -.02em; }
 .hero-pill .tag { flex: none; font-size: 11px; font-weight: 800; letter-spacing: .06em; padding: 3px 9px; border-radius: 99px; background: var(--brand); color: #fff; }
