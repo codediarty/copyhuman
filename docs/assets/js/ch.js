@@ -196,7 +196,7 @@
       '</div>' :
       '<a class="btn btn-p btn-lg btn-block" data-go target="_blank" rel="noopener" href="#"></a>' +
       '<div class="flow2">' + CH.ico('lock') + '<b>성균관컨설팅 안전결제</b><span>회원가입 없이 · 카드 · 토스페이 · 계좌이체</span></div>' +
-      '<ol class="buy-steps"><li><b>결제</b><span>새 창의 성균관컨설팅 결제 페이지</span></li><li><b>메일로 코드</b><span>보통 5분 안, 보내는 이름 ‘카피휴먼’</span></li><li><b>코드 넣기</b><span>아래 칸에 넣으면 바로 이어서</span></li></ol>' +
+      '<ol class="buy-steps"><li><b>결제</b><span>새 창의 성균관컨설팅 결제 페이지</span></li><li><b>메일로 코드</b><span>보통 1분 안, 보내는 이름 ‘카피휴먼’</span></li><li><b>코드 넣기</b><span>아래 칸에 넣으면 바로 이어서</span></li></ol>' +
       '<p class="fine">결제는 카피휴먼 운영사 <b>성균관컨설팅</b>의 결제 페이지에서 합니다. 결제가 확인되면 주문서의 이메일로 <b>16자리 토큰 코드</b>가 갑니다. 메일이 안 보이면 스팸함도 확인해 주세요. 영수증과 카드 명세서에는 성균관컨설팅으로 표시됩니다.</p>';
     box.innerHTML = '<div class="modal-in"><button class="modal-x" type="button" aria-label="닫기">×</button>' +
       '<div class="stack"><span class="eyebrow">토큰 충전</span><h2 id="buyT">' + CH.esc(opt.title || '월 구독 없이, 한 번만 충전하세요') + '</h2>' +
@@ -230,10 +230,12 @@
     var go = $('[data-go]', box);
     if (go) go.addEventListener('click', function () {
       var v = cur().id;
-      CH.ssset('ch_buy', { pack: v, at: Date.now(), intent: opt.intent || '' });
+      kickStart(v, opt.intent);
       if (window.gtag) try { window.gtag('event', 'begin_checkout', { items: [{ item_id: v }] }); } catch (e) { /* 무시 */ }
-      setTimeout(function () { cm.className = 'code-msg'; cm.textContent = '결제를 마치면 메일로 받은 16자리 코드를 여기에 넣어 주세요. 넣어 둔 글로 바로 이어서 진행합니다.'; ci.focus(); }, 400);
+      setTimeout(function () { cm.className = 'code-msg'; cm.textContent = KICK_MSG; ci.focus(); }, 400);
     });
+    var shB = $('[data-shop]', box);
+    if (shB) shB.addEventListener('click', function () { kickStart(cur().id, opt.intent); });
     var payB = $('[data-pay]', box);
     if (payB) payB.addEventListener('click', function () {
       var pm = $('[data-pay-msg]', box), mail = String(($('#payMail', box) || {}).value || '').trim(), p = cur();
@@ -284,6 +286,47 @@
     setTimeout(function () { if (opt.focusCode) ci.focus(); else { var c = $('input[name=pk]:checked', box); if (c) c.focus(); } }, 60);
   };
   CH.closeBuy = close;
+
+  /* ---------- 결제 확인 앞당기기(성균관컨설팅 결제 페이지로 결제할 때) ----------
+     결제 단추를 누른 뒤 20분 동안 카피휴먼 서버에 '지금 주문을 확인해 달라'(am.orderkick)고 알립니다.
+     30초마다, 그리고 이 화면으로 돌아오는 순간 바로 알리고, 서버는 20초에 한 번만 실제로 확인해 결제가 끝난 주문에 코드 메일을 보냅니다.
+     서버의 5분 예약 확인은 그대로라서 이 화면을 닫아도 코드 메일은 갑니다. 새 코드를 넣으면 멈춥니다. */
+  var KICK = { win: 20 * 60 * 1000, gap: 30000, min: 15000, first: 20000, soon: 21000 };
+  var KICK_MSG = '결제를 마치고 이 화면으로 돌아오면 바로 확인해 메일로 16자리 코드를 보냅니다(보통 1분 안). 받은 코드를 여기에 넣으면 넣어 둔 글로 바로 이어서 진행합니다.';
+  var KICK_BACK = '결제를 확인하고 있습니다. 결제가 끝났다면 곧 메일로 16자리 코드가 갑니다(보내는 이름 ‘카피휴먼’, 안 보이면 스팸함도 확인해 주세요). 받은 코드를 여기에 넣어 주세요.';
+  var kickT = 0, kickLast = 0, kickBusy = false;
+  function kickLive() {
+    var b = CH.ssget('ch_buy');
+    if (!b || !b.at || Date.now() - b.at > KICK.win || !CFG.api) return false;
+    return !(P.code && typeof b.code0 === 'string' && P.code !== b.code0);   // 받은 새 코드를 넣었으면 그만
+  }
+  function kickLater(ms) { if (kickT) clearTimeout(kickT); kickT = setTimeout(function () { kickT = 0; kickNow(); }, Math.max(0, ms)); }
+  function kickNow() {
+    if (kickBusy || !kickLive()) return;
+    var since = Date.now() - kickLast;
+    if (since < KICK.min) { kickLater(KICK.min - since); return; }
+    kickBusy = true; kickLast = Date.now();
+    /* CH.call 을 쓰지 않음: 잠깐의 연결 끊김(돌아온 직후 등)으로 엔진 연결 상태를 '꺼짐'으로 바꾸지 않게 */
+    var ctl = 'AbortController' in window ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, 30000) : 0;
+    fetch(CFG.api, { method: 'POST', body: JSON.stringify({ action: 'am.orderkick', _o: CFG.origin || location.hostname, cid: CH.cid() }), signal: ctl ? ctl.signal : undefined, redirect: 'follow' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { return j || {}; }, function () { return {}; })
+      .then(function (j) { if (tm) clearTimeout(tm); kickBusy = false; if (kickLive()) kickLater(j.soon ? KICK.soon : KICK.gap); });
+  }
+  function kickStart(pack, intent) {
+    CH.ssset('ch_buy', { pack: pack, at: Date.now(), intent: intent || '', code0: P.code || '' });
+    kickLater(KICK.first);
+  }
+  function kickBack() {
+    if (document.visibilityState === 'hidden' || !kickLive()) return;
+    kickNow();
+    var m = box && $('[data-code-msg]', box);
+    if (m && m.textContent === KICK_MSG) m.textContent = KICK_BACK;
+  }
+  document.addEventListener('visibilitychange', kickBack);
+  window.addEventListener('focus', kickBack);
+  window.addEventListener('pageshow', kickBack);
+  if (kickLive()) kickLater(1500);   // 결제 창을 연 뒤 이 화면을 새로 고쳤거나 다시 열었을 때 이어서
 
   /* ---------- 결제하고 돌아왔을 때(바로 결제) ---------- */
   var Q = {}; try { new URLSearchParams(location.search).forEach(function (v, k) { Q[k] = v; }); } catch (e) { Q = {}; }
