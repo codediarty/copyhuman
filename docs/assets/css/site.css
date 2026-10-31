@@ -809,7 +809,8 @@ fieldset { min-inline-size: 0; }
 .plan.best .badge { background: #ffffff; color: #0e1017; }
 .plan.top .badge { background: var(--brand); color: #ffffff; }
 .plan h3 { font-size: 19px; color: var(--ink); letter-spacing: -.03em; }
-.plan .who { margin: -6px 0 0; font-size: 14px; color: var(--mut); padding-right: 64px; }
+.plan .who { margin: -6px 0 0; font-size: 14px; color: var(--mut); letter-spacing: -.02em; }
+@media (min-width: 1001px) and (max-width: 1180px) { .plan { padding: 26px 18px 20px; } .plan .badge { right: 14px; } .plan .who { font-size: 13px; } }
 .plan .tok { margin-top: 6px; font-size: 44px; font-weight: 800; letter-spacing: -.055em; font-variant-numeric: tabular-nums; line-height: 1.05; color: var(--ink); }
 .plan .tok small { font-size: 15px; font-weight: 650; color: var(--mut); margin-left: 4px; letter-spacing: -.01em; }
 .plan .price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 9px; padding-top: 14px; border-top: 1px solid var(--line); }
