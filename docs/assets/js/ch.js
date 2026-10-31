@@ -54,7 +54,7 @@
   };
   CH.costParts = function (kind, parts) { return Math.round(parts.reduce(function (a, p) { return a + CH.cost(kind, p.length); }, 0) * 10) / 10; };
 
-  /* ---------- 엔진 서버(AIMarker 엔진) ---------- */
+  /* ---------- 엔진 서버(카피휴먼 서버) ---------- */
   var server = CH.server = { state: 'unknown', why: '' };   // unknown | ok | off
   var CR_WON = 10;   // 서버 단위(크레딧) 1 = 10원, 사이트 1토큰 = 100원
   function toTok(cr) { return typeof cr === 'number' && isFinite(cr) ? Math.round(cr * CR_WON / (CFG.tokWon || 100) * 10) / 10 : cr; }
@@ -182,7 +182,7 @@
     var mail0 = CH.sget('ch_mail'), tail = P.code ? P.norm(P.code).slice(-4) : '';
     box = document.createElement('div');
     box.className = 'modal'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'buyT');
-    var offNote = server.state === 'off' ? '<p class="fine">지금은 엔진 서버와 연결되지 않아 이 화면에서 코드를 확인할 수 없습니다. 같은 토큰 코드는 엔진 제공사 AIMarker(aimarker.kr)에서도 바로 쓸 수 있습니다.</p>' : '';
+    var offNote = server.state === 'off' ? '<p class="fine">지금은 엔진 서버와 연결되지 않아 이 화면에서 코드를 확인할 수 없습니다. 잠시 뒤 다시 열어 주세요.</p>' : '';
     var payPart = direct ?
       '<div class="pay-form">' +
         '<label class="fld"><span>코드를 받을 이메일</span><input id="payMail" type="email" inputmode="email" autocomplete="email" spellcheck="false" maxlength="120" placeholder="name@example.com" value="' + CH.esc(mail0) + '"></label>' +
@@ -193,11 +193,11 @@
         '<p class="code-msg" data-pay-msg role="status"></p>' +
         '<div class="flow2">' + CH.ico('lock') + '<b>성균관컨설팅 안전결제</b><span>토스페이먼츠 · 카드 · 간편결제</span></div>' +
         '<p class="fine">결제가 끝나면 이 화면으로 돌아와 <b>토큰 코드가 바로 열리고</b>, 넣어 둔 글로 하던 일을 이어서 합니다. 코드는 적어 주신 이메일로도 보내 드립니다. 영수증과 카드 명세서에는 성균관컨설팅으로 표시되며, 카피휴먼은 카드 번호 같은 결제 정보를 받지 않습니다.</p>' +
-        '<p class="fine"><a href="#" data-shop target="_blank" rel="noopener">성균관컨설팅 결제 페이지에서 결제하기</a>(계좌이체 · 세금계산서, 코드는 영업일 하루 안에 메일로)</p>' +
+        '<p class="fine"><a href="#" data-shop target="_blank" rel="noopener">성균관컨설팅 결제 페이지에서 결제하기</a>(계좌이체 · 세금계산서도 됩니다. 결제가 확인되면 바로 메일로 코드가 갑니다)</p>' +
       '</div>' :
       '<a class="btn btn-p btn-lg btn-block" data-go target="_blank" rel="noopener" href="#"></a>' +
       '<div class="flow2">' + CH.ico('lock') + '<b>성균관컨설팅 안전결제</b><span>회원가입 없이 · 카드 · 토스페이 · 계좌이체</span></div>' +
-      '<p class="fine">결제는 카피휴먼 운영사 <b>성균관컨설팅</b>의 결제 페이지에서 합니다. 주문서의 결과 수령 이메일로 <b>16자리 토큰 코드</b>를 보내 드립니다. 영수증과 카드 명세서에는 성균관컨설팅으로 표시되고, 결제 페이지 상품명에는 엔진 제공사 AIMarker 이름이 함께 보일 수 있습니다.</p>';
+      '<p class="fine">결제는 카피휴먼 운영사 <b>성균관컨설팅</b>의 결제 페이지에서 합니다. 결제가 확인되면 바로(보통 5분 안) 주문서의 이메일로 <b>16자리 토큰 코드</b>가 갑니다(보내는 이름 ‘카피휴먼’). 메일이 안 보이면 스팸함도 확인해 주세요. 영수증과 카드 명세서에는 운영사 성균관컨설팅으로 표시되고, 결제 페이지 상품명에는 아직 AIMarker 이름이 보일 수 있습니다.</p>';
     box.innerHTML = '<div class="modal-in"><button class="modal-x" type="button" aria-label="닫기">×</button>' +
       '<div class="stack"><span class="eyebrow">토큰 충전</span><h2 id="buyT">' + CH.esc(opt.title || '필요한 만큼만 충전하세요') + '</h2>' +
       '<p class="muted small">1토큰 = ' + CH.n(CFG.tokWon || 100) + '원 · 쓴 만큼만 빠지고 남은 토큰은 5년 동안 이어서 씁니다.</p></div>' +
@@ -268,7 +268,7 @@
         var cb = onDone; setTimeout(function () { close(); if (cb) cb(info); }, 700);
       }).catch(function (e) {
         cm.className = 'code-msg bad';
-        cm.textContent = e && e.code === 'OFF' ? '지금은 엔진 서버와 연결되지 않아 코드를 확인하지 못했습니다. 잠시 뒤 다시 시도하거나 aimarker.kr에서 같은 코드를 써 주세요.' : (e && e.message) || '토큰 코드를 확인해 주세요.';
+        cm.textContent = e && e.code === 'OFF' ? '지금은 엔진 서버와 연결되지 않아 코드를 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.' : (e && e.message) || '토큰 코드를 확인해 주세요.';
       }).then(function () { b.disabled = false; });
     }
     $('[data-code]', box).addEventListener('click', submitCode);

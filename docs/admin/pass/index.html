@@ -1,0 +1,98 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>토큰 관리 | 카피휴먼</title><meta name="description" content="카피휴먼 운영자용 토큰 코드 관리 화면입니다."><meta name="robots" content="noindex, nofollow"><link rel="canonical" href="https://copyhuman.kr/admin/pass/"><link rel="icon" href="../../assets/img/logo-192.png" type="image/png" sizes="192x192"><link rel="icon" href="../../favicon.ico" sizes="16x16 32x32 48x48"><link rel="stylesheet" href="../../assets/css/adm.css?v=20261031a"></head>
+<body class="app" data-page="adminpass" data-root="../../">
+<div class="adm">
+  <header class="adm-h">
+    <a class="brand" href="../../" aria-label="카피휴먼 홈"><img src="../../assets/img/logo-192.png" alt="" width="28" height="28"><span>카피휴먼</span></a>
+    <span class="adm-tag">토큰 관리</span>
+    <span class="adm-sp"></span>
+    <span class="adm-exp" id="admExp"></span>
+  </header>
+
+  <section class="adm-card" id="admGate" hidden>
+    <h1>토큰 관리 링크 받기</h1>
+    <p>이 화면은 운영자만 씁니다. 아래 단추를 누르면 등록된 운영자 메일로 관리 링크(2일)가 갑니다. 메일의 단추를 눌러 들어오세요.</p>
+    <div class="adm-row"><button class="btn btn-p" type="button" id="admLink">관리 링크 메일로 받기</button></div>
+    <div class="msg" role="status" id="admGateMsg"></div>
+    <p class="adm-fine">관리 링크는 비밀번호처럼 다뤄 주세요. 다른 사람에게 보내지 마세요.</p>
+  </section>
+
+  <div id="admMain" hidden>
+    <section class="adm-card" id="orders">
+      <div class="adm-st"><h2>주문</h2><span class="adm-n" id="ordN"></span><span class="adm-sp"></span><button class="btn btn-g btn-s" type="button" data-reload>새로 고침</button></div>
+      <p class="adm-help">결제가 확인되면 새 코드 주문은 <b>토큰 보내기</b>, 충전 주문은 <b>충전하기</b>를 누르세요. 코드나 충전 알림이 주문한 이메일로 바로 갑니다. 성균관컨설팅 결제 페이지에서 결제한 주문은 결제 내역의 주문자 이메일 · 금액으로 맞춰 보세요.</p>
+      <p class="adm-help"><b>토큰 자동 발송</b>: 성균관컨설팅(아임웹)에서 카피휴먼 토큰 상품이 결제되면 카피휴먼 서버가 바로 16자리 코드를 만들어 주문자 이메일로 보냅니다(같은 주문은 한 번만). 상품은 <b>체험 30토큰 3,000원(아임웹 34) · 라이트 150토큰 10,000원(35) · 프로 500토큰 30,000원(36, 추천) · 프리미엄 1,100토큰 50,000원(37)</b>. 보낸 코드는 아래 코드 목록의 메모 ‘아임웹 결제 자동 · 주문 …’으로 보입니다. 주문자 이메일이 없거나 메일이 실패하면 운영 메일(copyhuman2@gmail.com)로 알림이 가니, 그 주문만 <b>직접 만들기</b>로 보내 주세요.</p>
+      <p class="adm-help"><b>단위(10.24부터)</b>: 이 화면의 토큰은 1토큰 = 100원입니다. 손님 메일은 10.30부터 토큰으로 갑니다. 서버 기록은 크레딧(1크레딧 = 10원)이라 이 화면이 토큰으로 바꿔 보여 주고, 이 화면에 넣는 토큰 수는 크레딧으로 바꿔 서버에 보냅니다.</p>
+      <div class="adm-list" id="ordList"><p class="adm-empty">불러오는 중…</p></div>
+    </section>
+
+    <section class="adm-card" id="issue">
+      <h2>토큰 코드 직접 만들기</h2>
+      <p class="adm-help">계좌 이체 확인, 보상, 쿠폰처럼 주문 없이 줄 때 씁니다. 받는 메일을 적으면 코드가 그 메일로 가고, 비워 두면 코드를 이 화면에만 한 번 보여 드립니다(최대 20개). 유효기간은 만든 날부터 5년입니다.</p>
+      <form id="issueForm" class="adm-form" autocomplete="off">
+        <div class="adm-grid">
+          <div class="field"><label for="isProd">종류</label><select class="sel" id="isProd" name="product"></select></div>
+          <div class="field"><label for="isTo">받는 메일 <small>선택</small></label><input class="inp" id="isTo" name="to" type="email" maxlength="80" placeholder="name@example.com"></div>
+          <div class="field"><label for="isN">개수 <small>메일이 없을 때만</small></label><input class="inp" id="isN" name="n" type="number" min="1" max="20" value="1"></div>
+          <div class="field"><label for="isMemo">메모 <small>선택</small></label><input class="inp" id="isMemo" name="memo" maxlength="100" placeholder="예: 계좌 이체 확인 10/17"></div>
+        </div>
+        <div class="adm-row"><button class="btn btn-p" type="submit">코드 만들기</button></div>
+        <div class="msg" role="status"></div>
+      </form>
+      <div id="issueOut"></div>
+    </section>
+
+    <section class="adm-card adm-two" id="topup">
+      <div>
+        <h2>충전</h2>
+        <p class="adm-help">쓰고 있는 토큰 코드에 더합니다. 상품을 고르면 그 상품의 토큰(더 받는 토큰 포함)이 환불 기준과 함께 기록되고, 토큰 수만 넣으면 보상 · 지급으로 기록됩니다(환불 대상 아님).</p>
+        <form id="topForm" class="adm-form" autocomplete="off">
+          <div class="adm-grid">
+            <div class="field"><label for="tpId">코드 ID</label><input class="inp" id="tpId" name="id" maxlength="24" placeholder="PS261021-XXXXXXXX" required></div>
+            <div class="field"><label for="tpProd">상품 <small>또는 아래 토큰 수</small></label><select class="sel" id="tpProd" name="product"></select></div>
+            <div class="field"><label for="tpCr">토큰 수 <small>상품이 없을 때</small></label><input class="inp" id="tpCr" name="cr" type="number" min="1" max="2000000" placeholder="예: 50" step="0.1"></div>
+            <div class="field"><label for="tpOrder">주문 번호 <small>선택</small></label><input class="inp" id="tpOrder" name="order" maxlength="20" placeholder="AM1021-XXXX"></div>
+            <div class="field"><label for="tpTo">알림 메일 <small>선택</small></label><input class="inp" id="tpTo" name="to" type="email" maxlength="80" placeholder="name@example.com"></div>
+            <div class="field"><label for="tpMemo">메모 <small>선택</small></label><input class="inp" id="tpMemo" name="memo" maxlength="60" placeholder="예: 성균관컨설팅 결제 확인 10/21"></div>
+          </div>
+          <div class="adm-row"><button class="btn btn-p" type="submit">충전하기</button></div>
+          <div class="msg" role="status"></div>
+        </form>
+      </div>
+      <div>
+        <h2>차감</h2>
+        <p class="adm-help">잘못 충전한 토큰을 바로잡거나 환불한 만큼 뺄 때 씁니다. 왜 뺀 토큰인지 메모를 꼭 적어 주세요.</p>
+        <form id="dedForm" class="adm-form" autocomplete="off">
+          <div class="adm-grid">
+            <div class="field"><label for="ddId">코드 ID</label><input class="inp" id="ddId" name="id" maxlength="24" placeholder="PS261021-XXXXXXXX" required></div>
+            <div class="field"><label for="ddCr">뺄 토큰</label><input class="inp" id="ddCr" name="cr" type="number" min="1" max="2000000" required placeholder="예: 50" step="0.1"></div>
+            <div class="field adm-wide"><label for="ddMemo">메모 <small>필수</small></label><input class="inp" id="ddMemo" name="memo" maxlength="60" required placeholder="예: 환불 · 주문 2026103xxxxxxx"></div>
+          </div>
+          <div class="adm-row"><button class="btn btn-p" type="submit">차감하기</button></div>
+          <div class="msg" role="status"></div>
+        </form>
+      </div>
+    </section>
+
+    <section class="adm-card" id="passes">
+      <div class="adm-st"><h2>토큰 코드</h2><span class="adm-n" id="psN"></span><span class="adm-sp"></span><label class="adm-q"><span class="sr">코드 찾기</span><input class="inp" id="psQ" type="search" placeholder="코드 ID, 주문 번호, 메일로 찾기"></label></div>
+      <p class="adm-help">원래 코드는 저장하지 않습니다(해시만). 코드를 잃어버린 분께는 새 코드를 만들어 남은 토큰만큼 충전해 보내고, 이전 코드는 <b>중지</b>하세요. 예전 이용권도 여기에 함께 보입니다.</p>
+      <div class="adm-list" id="psList"><p class="adm-empty">불러오는 중…</p></div>
+    </section>
+
+    <section class="adm-card adm-two" id="setup">
+      <div>
+        <h2>결제</h2>
+        <p class="adm-help">토큰 결제는 공식 결제처 성균관컨설팅으로 연결합니다. 상품별 결제 페이지 주소(성균관컨설팅 쇼핑몰)는 스크립트 속성 <code>AM_BUY_LINKS</code>(예: {"c30":"https://skkc.co.kr/shop_view?idx=36&amp;kaiec_buy=1"})에 넣거나 사이트 설정(ch-config.js)의 상품 번호를 쓰면, 주문한 분에게 '성균관컨설팅에서 결제하기' 단추가 보입니다. 결제 안내 글은 <code>AM_PAY_GUIDE</code>로 바꿉니다. 바로 결제(토스페이먼츠)는 <code>TOSS_CLIENT_KEY</code>, <code>TOSS_SECRET_KEY</code>로 켭니다.</p>
+        <dl class="adm-dl" id="payBox"></dl>
+      </div>
+      <div>
+        <h2>보안</h2>
+        <p class="adm-help">관리 링크가 새어 나갔다면 모든 관리 링크를 끊으세요. 그동안 보낸 링크가 모두 무효가 되고, 새 링크가 운영자 메일로 갑니다.</p>
+        <div class="adm-row"><button class="btn btn-g" type="button" id="admRotate">모든 관리 링크 끊기</button></div>
+        <div class="msg" role="status" id="rotMsg"></div>
+      </div>
+    </section>
+  </div>
+  <div class="adm-toast" id="admToast" role="status" aria-live="polite"></div>
+</div>
+<script src="../../assets/js/ch-config.js?v=20261031a" defer></script><script src="../../assets/js/ch-adm.js?v=20261031a" defer></script></body></html>

@@ -1,5 +1,5 @@
 /* 카피휴먼 검사 도구: ① 글 넣기 → ② AI 작성률 확인(결과확인서) → ③ 휴머나이징
-   - 엔진: AIMarker 엔진 서버(DET · HUM)를 먼저 쓰고, 닿지 않으면 브라우저 안 CH-Lite로 검사합니다.
+   - 엔진: 카피휴먼 서버(DET · HUM)를 먼저 쓰고, 닿지 않으면 브라우저 안 CH-Lite로 검사합니다.
    - 카피킬러 AI생성검사 결과확인서(PDF)를 올리면 표시된 영역을 그대로 불러와 그 문장만 다듬을 수 있습니다.
    - 결과의 모든 수치는 엔진이 낸 실제 값입니다. 고정값이나 부풀린 값은 쓰지 않습니다. */
 (function () {
@@ -160,7 +160,7 @@
     }).join('') + '</div>';
   }
   function engineLine(N) {
-    return N.engine === 'lite' ? '카피휴먼 간이 엔진 CH-Lite 1.0' : 'AIMarker 판별 엔진 DET 1.0' + (N.critName ? ' · ' + esc(N.critName.replace('AIMarker 판정 기준', '판정 기준')) : '');
+    return N.engine === 'lite' ? '카피휴먼 간이 엔진 CH-Lite 1.0' : '카피휴먼 판별 엔진 DET 1.1' + (N.critName ? ' · ' + esc(N.critName.replace(/^(AIMarker|카피휴먼) 판정 기준/, '판정 기준')) : '');
   }
   function reportHtml(N, ctx) {
     var b = N.band, k = b.key;
