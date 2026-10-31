@@ -91,7 +91,7 @@
       aiN: a.aiN != null ? a.aiN : ((a.lv || {}).hi || 0) + ((a.lv || {}).mid || 0) + ((a.lv || {}).low || 0), lv: a.lv || { hi: 0, mid: 0, low: 0 },
       band: bandOf(a.band, a.aiN != null ? a.aiN : ((a.lv || {}).hi || 0) + ((a.lv || {}).mid || 0) + ((a.lv || {}).low || 0)),
       segN: a.segN || 0, segAi: a.segAi || 0, chat: a.chat || 0, feat: a.feat || [], opinion: (a.opinion || []).map(CH.bandWord).map(firm), cn: a.cn || '',
-      sentences: a.sentences || [], segs: a.segs || null, model: a.model || '', critName: a.critName || '', samples: r.samples || [], shown: a.shown, locked: !!a.locked || !r.full
+      sentences: a.sentences || [], segs: a.segs || null, model: a.model || '', ver: a.v || '', critName: a.critName || '', samples: r.samples || [], shown: a.shown, locked: !!a.locked || !r.full
     };
     if (N.engine === 'lite') N.locked = true;
     Object.keys(extra || {}).forEach(function (k) { N[k] = extra[k]; });
@@ -119,7 +119,7 @@
       if (a.lv) { M.lv.hi += a.lv.hi || 0; M.lv.mid += a.lv.mid || 0; M.lv.low += a.lv.low || 0; }
       (a.feat || []).forEach(function (f) { var o = F[f.cat] = F[f.cat] || { cat: f.cat, name: f.name, n: 0, segs: 0, tags: [], why: f.why, lock: 0 }; o.n += f.n || 0; o.segs += f.segs || 0; if (f.lock) o.lock = 1; (f.tags || []).forEach(function (t) { if (o.tags.indexOf(t) < 0 && o.tags.length < 4) o.tags.push(t); }); });
       if (r.samples) M.samples = M.samples.concat(r.samples);
-      if (!M.cn && a.cn) M.cn = a.cn; M.model = a.model || M.model; M.critName = a.critName || M.critName;
+      if (!M.cn && a.cn) M.cn = a.cn; M.model = a.model || M.model; M.ver = a.v || M.ver; M.critName = a.critName || M.critName;
     });
     M.aiN = M.lv.hi + M.lv.mid + M.lv.low;
     M.rate = M.chars ? Math.round(M.aiChars * 100 / M.chars) : 0;
@@ -159,8 +159,9 @@
       return '<div class="feat' + (lock ? ' lock' : '') + '"><div class="feat-h"><b>' + esc(f.name) + '</b><span>' + CH.n(f.n) + '곳' + (f.segs ? ' · ' + f.segs + '구간' : '') + '</span></div><p>' + esc(f.why || '') + '</p>' + (tags ? '<div class="tags"' + (lock ? ' aria-hidden="true"' : '') + '>' + tags + '</div>' : '') + (lock ? '<p class="small muted">' + ico('lock') + ' 표현별 위치와 바꿀 말은 전체 결과에서 보입니다.</p>' : '') + '</div>';
     }).join('') + '</div>';
   }
+  function engV(v, d) { var m = /^(\d+)\.(\d+)/.exec(String(v || '')); return m ? m[1] + '.' + m[2] : d; }   // 서버 판 '1.3.0' → '1.3'
   function engineLine(N) {
-    return N.engine === 'lite' ? '카피휴먼 간이 엔진 CH-Lite 1.0' : '카피휴먼 판별 엔진 DET 1.1' + (N.critName ? ' · ' + esc(N.critName.replace(/^(AIMarker|카피휴먼) 판정 기준/, '판정 기준')) : '');
+    return N.engine === 'lite' ? '카피휴먼 간이 엔진 CH-Lite 1.0' : '카피휴먼 판별 엔진 DET ' + engV(N.ver, '1.3') + (N.critName ? ' · ' + esc(N.critName.replace(/^(AIMarker|카피휴먼) 판정 기준/, '판정 기준')) : '');
   }
   function reportHtml(N, ctx) {
     var b = N.band, k = b.key;
@@ -679,9 +680,9 @@
       var p = CH.server.state === 'off' ? Promise.resolve(lite()) : CH.call('am.humanize', { text: first, tone: 'auto' }, 90000).catch(function (e) { if (e && (e.code === 'OFF' || e.code === 'SLOW')) return lite(); throw e; });
       p.then(function (r) {
         var box2 = document.createElement('article'); box2.className = 'rep';
-        box2.innerHTML = '<header class="rep-h"><div><small>' + esc(label || '첫 문단 미리보기') + '</small><h3>이렇게 다듬어집니다</h3></div><dl class="rep-meta"><dt>바꾼 곳</dt><dd>' + CH.n(r.changes || 0) + '</dd><dt>엔진</dt><dd>' + (r.engine === 'lite' ? 'CH-Lite' : 'HUM 1.1') + '</dd></dl></header>' +
+        box2.innerHTML = '<header class="rep-h"><div><small>' + esc(label || '첫 문단 미리보기') + '</small><h3>이렇게 다듬어집니다</h3></div><dl class="rep-meta"><dt>바꾼 곳</dt><dd>' + CH.n(r.changes || 0) + '</dd>' + (r.taste && r.taste.before != null ? '<dt>AI 작성률</dt><dd>' + r.taste.before + '% → ' + r.taste.after + '%</dd>' : '') + '<dt>엔진</dt><dd>' + (r.engine === 'lite' ? 'CH-Lite' : 'HUM ' + engV(r.hum, '1.4')) + '</dd></dl></header>' +
           '<div class="rep-sec"><div class="pairs"><div class="pair"><div><small>원문</small>' + esc(r.src || first) + '</div><div><small>다듬은 문장</small>' + diffHtml(r.src || first, r.text || '') + '</div></div></div>' +
-          '<p class="fine">' + (r.engine === 'lite' ? '간이 엔진 미리보기입니다. 실제 휴머나이징은 서버 엔진(HUM)이 글 전체를 문장마다 확인하며 다듬습니다.' : '무료 미리보기는 첫 문단만 다듬어 보여 드립니다. 무엇을 왜 바꿨는지는 전체 결과에서 문장마다 보입니다.') + '</p>' +
+          '<p class="fine">' + (r.engine === 'lite' ? '간이 엔진 미리보기입니다. 실제 휴머나이징은 서버 엔진(HUM)이 글 전체를 문장마다 확인하며 다듬습니다.' : '무료 미리보기는 첫 문단만 다듬어 보여 드립니다.' + (r.taste && r.taste.before != null ? ' 같은 판정 기준으로 다시 재면 이 문단의 AI 작성률이 ' + r.taste.before + '%에서 ' + r.taste.after + '%가 됩니다.' : '') + ' 무엇을 왜 바꿨는지는 전체 결과에서 문장마다 보입니다.') + '</p>' +
           '<div class="acts"><button class="btn btn-p" type="button" data-act="' + (S.ck && label ? 'ckhum' : 'hum') + '">' + (S.ck && label ? '표시된 문장 모두 다듬기 · ' + CH.tk(CH.costParts('pro', spanParts(S.ck.spans).map(function (q) { return q.text; }))) + '토큰' : '글 전체 휴머나이징 · ' + CH.tk(CH.costParts('pro', chunk(t).parts)) + '토큰(' + CH.won(CH.costParts('pro', chunk(t).parts)) + ')') + '</button></div></div>';
         var anchor = $('.pay', out);
         if (anchor) out.insertBefore(box2, anchor); else out.appendChild(box2);
