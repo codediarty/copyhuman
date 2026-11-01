@@ -288,33 +288,43 @@
   CH.closeBuy = close;
 
   /* ---------- 결제 확인 앞당기기(성균관컨설팅 결제 페이지로 결제할 때) ----------
-     결제 단추를 누른 뒤 20분 동안 카피휴먼 서버에 '지금 주문을 확인해 달라'(am.orderkick)고 알립니다.
-     30초마다, 그리고 이 화면으로 돌아오는 순간 바로 알리고, 서버는 20초에 한 번만 실제로 확인해 결제가 끝난 주문에 코드 메일을 보냅니다.
-     서버의 5분 예약 확인은 그대로라서 이 화면을 닫아도 코드 메일은 갑니다. 새 코드를 넣으면 멈춥니다. */
+     결제 단추를 누르면 서버에 '결제 페이지를 열었다'(am.ordpoke from 'open')를 알리고(서버가 지켜보기 방식이면 20분 동안 1분마다 확인),
+     그 뒤 20분 동안 30초마다, 그리고 이 화면으로 돌아오는 순간 '지금 주문을 확인해 달라'(am.ordpoke from 'wait')고 알립니다.
+     서버(AM주문.gs 1.1.x)가 잠금 · 3초 간격으로 묶어 확인하고 결제가 끝난 주문에 코드 메일을 보냅니다. am.ordpoke 가 없는 서버면(NO_ACTION)
+     CH서버.gs 의 am.orderkick(20초 간격)으로 바꿔 부릅니다. 서버의 예약 확인은 그대로라서 이 화면을 닫아도 코드 메일은 갑니다. 새 코드를 넣으면 멈춥니다. */
   var KICK = { win: 20 * 60 * 1000, gap: 30000, min: 15000, first: 20000, soon: 21000 };
   var KICK_MSG = '결제를 마치고 이 화면으로 돌아오면 바로 확인해 메일로 16자리 코드를 보냅니다(보통 1분 안). 받은 코드를 여기에 넣으면 넣어 둔 글로 바로 이어서 진행합니다.';
   var KICK_BACK = '결제를 확인하고 있습니다. 결제가 끝났다면 곧 메일로 16자리 코드가 갑니다(보내는 이름 ‘카피휴먼’, 안 보이면 스팸함도 확인해 주세요). 받은 코드를 여기에 넣어 주세요.';
-  var kickT = 0, kickLast = 0, kickBusy = false;
+  var kickT = 0, kickLast = 0, kickBusy = false, kickAct = 'am.ordpoke';
   function kickLive() {
     var b = CH.ssget('ch_buy');
     if (!b || !b.at || Date.now() - b.at > KICK.win || !CFG.api) return false;
     return !(P.code && typeof b.code0 === 'string' && P.code !== b.code0);   // 받은 새 코드를 넣었으면 그만
   }
   function kickLater(ms) { if (kickT) clearTimeout(kickT); kickT = setTimeout(function () { kickT = 0; kickNow(); }, Math.max(0, ms)); }
+  /* CH.call 을 쓰지 않음: 잠깐의 연결 끊김(돌아온 직후 등)으로 엔진 연결 상태를 '꺼짐'으로 바꾸지 않게 */
+  function kickPost(body) {
+    var ctl = 'AbortController' in window ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, 30000) : 0;
+    return fetch(CFG.api, { method: 'POST', body: JSON.stringify(Object.assign({ _o: CFG.origin || location.hostname, cid: CH.cid() }, body)), signal: ctl ? ctl.signal : undefined, redirect: 'follow' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { return j || {}; }, function () { return {}; })
+      .then(function (j) { if (tm) clearTimeout(tm); return j; });
+  }
   function kickNow() {
     if (kickBusy || !kickLive()) return;
     var since = Date.now() - kickLast;
     if (since < KICK.min) { kickLater(KICK.min - since); return; }
     kickBusy = true; kickLast = Date.now();
-    /* CH.call 을 쓰지 않음: 잠깐의 연결 끊김(돌아온 직후 등)으로 엔진 연결 상태를 '꺼짐'으로 바꾸지 않게 */
-    var ctl = 'AbortController' in window ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, 30000) : 0;
-    fetch(CFG.api, { method: 'POST', body: JSON.stringify({ action: 'am.orderkick', _o: CFG.origin || location.hostname, cid: CH.cid() }), signal: ctl ? ctl.signal : undefined, redirect: 'follow' })
-      .then(function (r) { return r.json(); })
-      .then(function (j) { return j || {}; }, function () { return {}; })
-      .then(function (j) { if (tm) clearTimeout(tm); kickBusy = false; if (kickLive()) kickLater(j.soon ? KICK.soon : KICK.gap); });
+    var act = kickAct;
+    kickPost(act === 'am.ordpoke' ? { action: act, from: 'wait' } : { action: act }).then(function (j) {
+      kickBusy = false;
+      if (j.code === 'NO_ACTION' && act === 'am.ordpoke') { kickAct = 'am.orderkick'; kickLast = 0; kickNow(); return; }
+      if (kickLive()) kickLater(j.soon ? KICK.soon : KICK.gap);
+    });
   }
   function kickStart(pack, intent) {
     CH.ssset('ch_buy', { pack: pack, at: Date.now(), intent: intent || '', code0: P.code || '' });
+    if (CFG.api) kickPost({ action: 'am.ordpoke', from: 'open' });
     kickLater(KICK.first);
   }
   function kickBack() {
