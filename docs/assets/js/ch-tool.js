@@ -198,15 +198,23 @@
     for (var i = 0; i < fl.length && acc > goal; i++) { var L = noSp(fl[i].t), gain = Math.max(0, shareOf(fl[i]) - PLAN_Q) * L; if (!target && !fl[i].ai && gain <= 0) continue; sel.push(fl[i]); need += L; acc -= gain; }
     return { sel: sel, need: need, est: total ? Math.max(0, Math.round(acc * 100 / total)) : 0 };
   }
+  function planAgg(N, t, target) {   // 무료 결과(문장 일부가 잠김)는 글자 합으로: 다듬은 AI 패턴 글자마다 AI 몫이 (U - PLAN_Q) 줄어든다고 봄
+    var total = N.chars || noSp(t), M = +CFG.planMargin || 1.25, cur = total * (N.rate || 0) / 100, k = SH.U - PLAN_Q;
+    var fc = N.flagChars != null ? N.flagChars : (N.aiChars || 0), aiN = N.aiN || 0;
+    var need = target ? Math.min(fc, Math.max(0, Math.ceil((cur - total * target / 100 / M) / k))) : fc;
+    return { sel: { length: fc && aiN ? Math.max(1, Math.min(aiN, Math.round(aiN * need / fc))) : 0 }, need: need, est: total ? Math.max(0, Math.round((cur - need * k) * 100 / total)) : 0 };
+  }
   function planRows(N, t, done) {
-    var total = N.chars || noSp(t), rate = N.rate || 0, A = planPick(N, t, 0, done);
-    if (!total || !A.sel.length) return [];
+    var part = !N.full || (N.sentences || []).some(function (x) { return x.lock; });   // 2.1 무료 결과는 잠긴 문장이 있어 글자 합으로 셈
+    var pick = function (target) { return part && !done ? planAgg(N, t, target) : planPick(N, t, target, done); };
+    var total = N.chars || noSp(t), rate = N.rate || 0, A = pick(0);
+    if (!total || !A.sel.length || !A.need) return [];
     var ratio = noSp(t) ? t.length / noSp(t) : 1.3, H = +CFG.manualHour || 1.5;
     var C = chunk(t), full = !!N.full, unit = full ? 0 : CH.costParts('unit', C.parts);
     var rows = [], used = {};
     [30, 20, 10].forEach(function (target) {
       if (rate < target) return;
-      var P = planPick(N, t, target, done);
+      var P = pick(target);
       if (!P.sel.length || P.est >= target || used[P.sel.length]) return;
       used[P.sel.length] = 1;
       rows.push({ target: target, need: P.need, est: P.est, n: P.sel.length });
