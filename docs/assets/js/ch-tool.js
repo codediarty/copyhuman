@@ -562,9 +562,12 @@
               return seq(pt.idx, function (ix) { return CH.call('am.humanize', { text: N.sentences[ix].t, tone: 'auto', variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { newT[ix] = (r2.text || N.sentences[ix].t).trim(); if (r2.aiAfter) { ac += r2.aiAfter.chars || 0; aa += r2.aiAfter.aiChars || 0; } }); });
             }).then(function () { show(progHtml('AI 점수 높은 문장부터 사람 말투로 바꾸는 중', k + 1, parts.length, '', 'hum', sel.map(function (x) { return x.t; }).join(' '))); });
           }).then(function () {
+            /* 고르지 않은 문장: 대표 수정 규칙 · 쉼표 · 가운뎃점 정리만(am.punc, 토큰 없음). 실패하면 원문 그대로 */
+            return puncRest(N, newT);
+          }).then(function (RT) {
             /* 글 다시 짜기: 엔진이 나눈 문장 순서대로, 문단은 빈 줄로 */
             var paras = [], pairs = [];
-            N.sentences.forEach(function (x, i) { var pi = x.para || 0; paras[pi] = paras[pi] || []; paras[pi].push(newT[i] != null ? newT[i] : x.t); });
+            N.sentences.forEach(function (x, i) { if (RT.skip[i]) return; var pi = x.para || 0; paras[pi] = paras[pi] || []; paras[pi].push(newT[i] != null ? newT[i] : (RT.t[i] != null ? RT.t[i] : x.t)); });
             var text = paras.filter(Boolean).map(function (pp) { return pp.join(' '); }).join('\n\n');
             sel.forEach(function (x) { if (newT[x._i] != null) pairs.push({ lv: x.g === 3 ? 'hi' : x.g === 2 ? 'mid' : 'low', p: x.p, a: x.t, b: newT[x._i] }); });
             var selChars = sel.reduce(function (a2, x) { return a2 + noSp(x.t); }, 0);
@@ -579,6 +582,27 @@
           });
         }).catch(fail).then(function () { busy(false); });
       }, 'plan');
+    }
+    /* 2026.11.09 대표 '쉼표 · 가운뎃점도 없애 줘': 목표 다듬기에서 고르지 않은 문장도 문단마다 이어진 묶음으로 am.punc(대표 수정 규칙 + 쉼표 · 가운뎃점 정리, 토큰 없음)에 보냄.
+       돌려받은 묶음 수가 같을 때만 반영(묶음의 첫 문장 자리에 묶음 전체, 나머지 자리는 비움) */
+    function puncRest(N, newT) {
+      var segs = [], cur = null, R = { t: {}, skip: {} };
+      N.sentences.forEach(function (x, i) {
+        var tt = String(x.t || '').replace(/\s*\n+\s*/g, ' ').trim(), pi = x.para || 0;
+        if (newT[i] != null || !tt) { cur = null; return; }
+        if (!cur || cur.para !== pi) { cur = { para: pi, idx: [], text: '' }; segs.push(cur); }
+        cur.idx.push(i); cur.text += (cur.text ? ' ' : '') + tt;
+      });
+      if (!segs.length || CH.server.state === 'off') return Promise.resolve(R);
+      var parts = [], pc = null;
+      segs.forEach(function (sg) { if (!pc || (pc.text.length + sg.text.length + 2) > CHUNK) { pc = { text: '', segs: [] }; parts.push(pc); } pc.text += (pc.text ? '\n\n' : '') + sg.text; pc.segs.push(sg); });
+      return seq(parts, function (pt) {
+        return CH.call('am.punc', { text: pt.text }, 60000).then(function (r) {
+          var outs = String((r && r.text) || '').split(/\n{2,}/);
+          if (outs.length !== pt.segs.length) return;
+          pt.segs.forEach(function (sg, j) { var o = outs[j].trim(); if (!o) return; R.t[sg.idx[0]] = o; sg.idx.slice(1).forEach(function (k) { R.skip[k] = 1; }); });
+        }).catch(function () { /* 그 묶음은 원문 그대로 */ });
+      }).then(function () { return R; });
     }
     function planResultHtml(res) {
       var LVK = { hi: 'AI 패턴', mid: 'AI 패턴', low: 'AI 패턴' };
