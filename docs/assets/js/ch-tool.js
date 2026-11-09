@@ -92,7 +92,7 @@
       band: bandOf(a.band, a.aiN != null ? a.aiN : ((a.lv || {}).hi || 0) + ((a.lv || {}).mid || 0) + ((a.lv || {}).low || 0)),
       segN: a.segN || 0, segAi: a.segAi || 0, chat: a.chat || 0, feat: a.feat || [], opinion: (a.opinion || []).map(CH.bandWord).map(firm), cn: a.cn || '',
       sentences: a.sentences || [], segs: a.segs || null, model: a.model || '', ver: a.v || '', critName: a.critName || '', samples: r.samples || [], shown: a.shown, locked: !!a.locked || !r.full,
-      autoTone: r.autoTone || ''
+      autoTone: r.autoTone || '', flagChars: a.flagChars != null ? a.flagChars : (a.aiChars || 0), flagRate: a.flagRate != null ? a.flagRate : (a.rate || 0)
     };
     if (N.engine === 'lite') N.locked = true;
     Object.keys(extra || {}).forEach(function (k) { N[k] = extra[k]; });
@@ -100,7 +100,7 @@
   }
   function opinionOf(M) {
     var o = [], top = M.feat.slice(0, 2).map(function (f) { return "'" + f.name + "'"; }).join('과 ');
-    o.push('검사한 글 ' + CH.n(M.chars) + '자 가운데 ' + CH.n(M.aiChars) + '자(' + M.rate + '%)가 AI 패턴 문장으로 나왔습니다.');
+    o.push('검사한 글 ' + CH.n(M.chars) + '자 가운데 AI 패턴 문장은 ' + CH.n(M.flagChars != null ? M.flagChars : M.aiChars) + '자(' + (M.flagRate != null ? M.flagRate : M.rate) + '%)이고, 문장마다 AI 점수를 글자 수만큼 반영한 AI 작성률은 ' + M.rate + '%입니다.');
     o.push(M.segN + '개 구간 가운데 ' + M.segAi + '개 구간에서 AI 패턴이 뚜렷합니다.');
     if (top) o.push('가장 많이 나온 AI 문체 특성은 ' + top + '입니다.');
     o.push('AI 패턴 문장은 ' + M.aiN + '개(AI 점수 85 이상 ' + M.lv.hi + '개)입니다. AI 점수가 높은 문장부터 고치면 AI 작성률이 가장 크게 내려갑니다.');
@@ -109,21 +109,21 @@
   }
   function merge(rs, full, src) {
     if (rs.length === 1) return normalize(rs[0], { full: full, total: src.length });
-    var M = { engine: 'server', full: full, rate: 0, n: 0, chars: 0, aiChars: 0, aiN: 0, lv: { hi: 0, mid: 0, low: 0 }, segN: 0, segAi: 0, chat: 0, feat: [], sentences: [], segs: [], samples: [], cn: '', total: src.length, locked: !full, autoTone: (rs[0] && rs[0].autoTone) || '' };
+    var M = { engine: 'server', full: full, rate: 0, n: 0, chars: 0, aiChars: 0, aiN: 0, lv: { hi: 0, mid: 0, low: 0 }, segN: 0, segAi: 0, chat: 0, feat: [], sentences: [], segs: [], samples: [], cn: '', total: src.length, locked: !full, autoTone: (rs[0] && rs[0].autoTone) || '', flagChars: 0 };
     var poff = 0, soff = 0, F = {};
     rs.forEach(function (r) {
       var a = r.ai || {}, ss = a.sentences || [], maxp = -1;
       ss.forEach(function (s) { var c = Object.assign({}, s); c.para = (s.para || 0) + poff; M.sentences.push(c); if ((s.para || 0) > maxp) maxp = s.para || 0; });
       (a.segs || []).forEach(function (g) { var c = Object.assign({}, g); c.s = g.s + soff; c.e = g.e + soff; M.segs.push(c); });
       poff += maxp + 1; soff += ss.length;
-      M.n += a.n || 0; M.chars += a.chars || 0; M.aiChars += a.aiChars || 0; M.segN += a.segN || 0; M.segAi += a.segAi || 0; M.chat += a.chat || 0;
+      M.n += a.n || 0; M.chars += a.chars || 0; M.aiChars += a.aiChars || 0; M.flagChars += a.flagChars != null ? a.flagChars : (a.aiChars || 0); M.segN += a.segN || 0; M.segAi += a.segAi || 0; M.chat += a.chat || 0;
       if (a.lv) { M.lv.hi += a.lv.hi || 0; M.lv.mid += a.lv.mid || 0; M.lv.low += a.lv.low || 0; }
       (a.feat || []).forEach(function (f) { var o = F[f.cat] = F[f.cat] || { cat: f.cat, name: f.name, n: 0, segs: 0, tags: [], why: f.why, lock: 0 }; o.n += f.n || 0; o.segs += f.segs || 0; if (f.lock) o.lock = 1; (f.tags || []).forEach(function (t) { if (o.tags.indexOf(t) < 0 && o.tags.length < 4) o.tags.push(t); }); });
       if (r.samples) M.samples = M.samples.concat(r.samples);
       if (!M.cn && a.cn) M.cn = a.cn; M.model = a.model || M.model; M.ver = a.v || M.ver; M.critName = a.critName || M.critName;
     });
     M.aiN = M.lv.hi + M.lv.mid + M.lv.low;
-    M.rate = M.chars ? Math.round(M.aiChars * 100 / M.chars) : 0;
+    M.rate = M.chars ? Math.round(M.aiChars * 100 / M.chars) : 0; M.flagRate = M.chars ? Math.round(M.flagChars * 100 / M.chars) : 0;
     M.feat = Object.keys(F).map(function (k) { var f = F[k]; f.share = M.segAi ? Math.round(f.segs * 100 / M.segAi) : 0; return f; }).sort(function (a, b) { return (b.segs - a.segs) || (b.n - a.n); });
     M.band = bandOf(LITE.judge({ chars: M.chars, rate: M.rate, segN: M.segN, segAi: M.segAi, chat: M.chat, hi: M.lv.hi, mid: M.lv.mid }), M.aiN);
     M.opinion = opinionOf(M).map(firm);
@@ -180,29 +180,38 @@
       '<div class="legend"><span class="l-hi"><i></i>AI 패턴 문장 · 숫자는 AI 점수(0~99), 진할수록 높음</span></div>' +
       '<div class="doc" tabindex="0">' + docHtml(N.sentences, N.locked ? 'free' : 'full') + '</div></div>' +
       '<div class="rep-sec"><h4>AI 문체 특성 <span class="cnt">' + N.feat.length + '종</span></h4>' + featHtml(N.feat) + '</div>' +
-      '<div class="rep-sec"><p class="fine">검사 엔진: ' + engineLine(N) + '. AI 작성률은 AI 패턴 문장의 글자 수를 전체 글자 수로 나눈 추정값이며 증명이 아닙니다. 다른 검사기의 결과와 다를 수 있고, 같은 글은 언제나 같은 결과가 나옵니다.</p>' + liteNote + '</div>' +
+      '<div class="rep-sec"><p class="fine">검사 엔진: ' + engineLine(N) + '. AI 작성률은 문장마다 AI 점수를 그 문장의 글자 수만큼 반영한 추정값(판별 모델이 틀릴 수 있는 만큼을 남겨 7~92%)이며 증명이 아닙니다. 다른 검사기의 결과와 다를 수 있고, 같은 글은 언제나 같은 결과가 나옵니다.</p>' + liteNote + '</div>' +
       '</article>';
   }
   /* 목표별 다듬기 계획(붙여 넣은 글): 검출 글자 가운데 얼마나 고쳐야 목표 아래로 내려가는지
      need = 전체 글자 × (지금 AI 작성률 − 목표) × 여유(1.25, 보수적으로), 검출 글자를 넘지 않음. 예상 수치는 고친 문장이 다시 잡히지 않을 때의 산술값 */
   function hourStr(h) { var m = Math.round(h * 2) / 2; if (m < 1) return '약 30분'; return '약 ' + Math.floor(m) + '시간' + (m % 1 ? ' 30분' : ''); }
-  function planRows(N, t) {
-    var total = N.chars || noSp(t), ai = N.aiChars || 0, rate = N.rate || 0, aiN = N.aiN || 0;
-    if (!total || !ai || !aiN) return [];
-    var ratio = noSp(t) ? t.length / noSp(t) : 1.3, M = +CFG.planMargin || 1.25, H = +CFG.manualHour || 1.5;
+  /* 2026.11.09 HUM 2.1: AI 작성률이 '문장 AI 점수 × 글자 수(7~92%)'가 되어 목표 다듬기도 같은 셈으로. 다듬을 문장은 AI 패턴 문장부터(그다음 AI 점수 35 이상),
+     다듬은 문장에도 AI 몫이 PLAN_Q(18%) 남는다고 보고 목표(여유 25%)까지 고름. 예상 수치는 이 셈의 산술값 */
+  var SH = { L: 0.07, U: 0.92 }, PLAN_Q = +CFG.planResid || 0.18;
+  function shareOf(x) { return SH.L + (SH.U - SH.L) * Math.max(0, Math.min(100, +x.p || 0)) / 100; }
+  function planPick(N, t, target, done) {
+    var total = N.chars || noSp(t), M = +CFG.planMargin || 1.25, acc = total * (N.rate || 0) / 100;
+    var fl = (N.sentences || []).map(function (x, i) { x._i = i; return x; }).filter(function (x) { return !x.skip && !(done && done[x._i]) && (x.ai || (+x.p || 0) >= 35); })
+      .sort(function (a, b) { return ((b.ai ? 1 : 0) - (a.ai ? 1 : 0)) || ((b.g || 0) - (a.g || 0)) || ((b.p || 0) - (a.p || 0)) || (noSp(b.t) - noSp(a.t)); });
+    var goal = target ? total * target / 100 / M : -1, sel = [], need = 0;
+    for (var i = 0; i < fl.length && acc > goal; i++) { var L = noSp(fl[i].t), gain = Math.max(0, shareOf(fl[i]) - PLAN_Q) * L; if (!target && !fl[i].ai && gain <= 0) continue; sel.push(fl[i]); need += L; acc -= gain; }
+    return { sel: sel, need: need, est: total ? Math.max(0, Math.round(acc * 100 / total)) : 0 };
+  }
+  function planRows(N, t, done) {
+    var total = N.chars || noSp(t), rate = N.rate || 0, A = planPick(N, t, 0, done);
+    if (!total || !A.sel.length) return [];
+    var ratio = noSp(t) ? t.length / noSp(t) : 1.3, H = +CFG.manualHour || 1.5;
     var C = chunk(t), full = !!N.full, unit = full ? 0 : CH.costParts('unit', C.parts);
     var rows = [], used = {};
     [30, 20, 10].forEach(function (target) {
       if (rate < target) return;
-      var need = Math.min(ai, Math.ceil(total * (rate - target) / 100 * M));
-      if (need <= 0) return;
-      var est = Math.max(0, Math.round((ai - need) * 100 / total));
-      if (est >= target) return;
-      var n = Math.max(1, Math.min(aiN, Math.round(aiN * need / ai)));
-      if (used[n]) return; used[n] = 1;
-      rows.push({ target: target, need: need, est: est, n: n });
+      var P = planPick(N, t, target, done);
+      if (!P.sel.length || P.est >= target || used[P.sel.length]) return;
+      used[P.sel.length] = 1;
+      rows.push({ target: target, need: P.need, est: P.est, n: P.sel.length });
     });
-    if (!used[aiN]) rows.push({ target: 0, need: ai, est: 0, n: aiN });
+    if (!used[A.sel.length]) rows.push({ target: 0, need: A.need, est: A.est, n: A.sel.length });
     rows.forEach(function (r) {
       var withSp = Math.round(r.need * ratio);
       r.pro = CH.cost('pro', withSp); r.tok = Math.round((r.pro + unit) * 10) / 10; r.unit = unit;
@@ -221,8 +230,9 @@
       }).join('') + '</tbody></table></div>';
   }
   function planNote() {
-    return '<p class="fine">예상 수치는 바꾼 문장이 다시 잡히지 않을 때의 산술값(여유 ' + Math.round(((+CFG.planMargin || 1.25) - 1) * 100) + '%)이며 다른 검사기를 보장하지 않습니다. 직접 고치는 시간은 1,000자당 ' + hourStr(+CFG.manualHour || 1.5) + '으로 잡은 추정입니다.</p>';
+    return '<p class="fine">예상 수치는 고른 문장을 다듬은 뒤에도 AI 몫이 ' + Math.round(PLAN_Q * 100) + '% 남는다고 본 산술값(여유 ' + Math.round(((+CFG.planMargin || 1.25) - 1) * 100) + '%)이며 다른 검사기를 보장하지 않습니다. 직접 고치는 시간은 1,000자당 ' + hourStr(+CFG.manualHour || 1.5) + '으로 잡은 추정입니다.</p>';
   }
+
   /* 2026.11.09 HUM 2.0 말투는 글마다 한 번 정함: 서버 검사(am.style check)가 글 전체의 자동 말투(autoTone)를 돌려줌. 'plain'이면 보고서 · 논설문처럼 보이는
      습니다체 글이라 엔진이 '~다'로 낮춤('~습니다'로 끝나는 문장은 판정 기준이 AI 쪽으로 크게 봐서 그대로 두면 잘 내려가지 않음).
      목표 다듬기는 문장 묶음마다 따로 보내서, 말투를 묶음마다 서버가 정하면 고른 묶음만 '~다'로 바뀌어 말투가 섞였음 → 정한 말투를 모든 조각(am.humanize · am.punc)에 똑같이 보냄.
@@ -557,12 +567,8 @@
           return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code }, 120000).then(function (r) { show(progHtml('문장마다 AI 점수를 매기는 중', i + 1, C.parts.length, '', 'check', t)); return r; });
         }).then(function (rs) { var N = merge(rs, true, t); N.total = t.length; N.locked = false; S.res = N; toneInit(t, N.autoTone); return N; });
         p.then(function (N) {
-          var M = +CFG.planMargin || 1.25, total = N.chars || noSp(t), ai = N.aiChars || 0;
-          var need = target ? Math.min(ai, Math.ceil(total * (N.rate - target) / 100 * M)) : ai;
-          var flagged = N.sentences.map(function (x, i) { x._i = i; return x; }).filter(function (x) { return x.ai; })
-            .sort(function (a, b) { return ((b.g || 0) - (a.g || 0)) || ((b.p || 0) - (a.p || 0)) || (noSp(b.t) - noSp(a.t)); });
-          var sel = [], got = 0;
-          for (var i = 0; i < flagged.length && (got < need || !target); i++) { sel.push(flagged[i]); got += noSp(flagged[i].t); }
+          var total = N.chars || noSp(t), cur = total * (N.rate || 0) / 100, PK = planPick(N, t, target), sel = PK.sel;   // 2.1 목표표와 같은 셈으로 고름
+          var flaggedN = N.sentences.filter(function (x) { return x.ai; }).length;
           if (!sel.length) throw { message: '다듬을 AI 패턴 문장이 없습니다.' };
           sel.sort(function (a, b) { return a._i - b._i; });
           /* 2026.11.09 HUM 1.9: 같은 문단에서 바로 이어진 고른 문장은 한 덩어리로 보냄. 엔진이 두 문장을 '~는데 · ~고 · ~지만'으로 이을 수 있어야
@@ -592,16 +598,17 @@
             N.sentences.forEach(function (x, i) { if (RT.skip[i] || GS[i]) return; var pi = x.para || 0; paras[pi] = paras[pi] || []; paras[pi].push(newT[i] != null ? newT[i] : (RT.t[i] != null ? RT.t[i] : x.t)); });
             var text = paras.filter(Boolean).map(function (pp) { return pp.join(' '); }).join('\n\n');
             groups.forEach(function (gg) { if (newT[gg.idx[0]] == null) return; var top = gg.idx.map(function (ix) { return N.sentences[ix]; }).sort(function (a, b) { return ((b.g || 0) - (a.g || 0)) || ((b.p || 0) - (a.p || 0)); })[0]; pairs.push({ lv: top.g === 3 ? 'hi' : top.g === 2 ? 'mid' : 'low', p: top.p, a: gg.idx.map(function (ix) { return N.sentences[ix].t; }).join(' '), b: newT[gg.idx[0]] }); });
-            var selChars = sel.reduce(function (a2, x) { return a2 + noSp(x.t); }, 0);
-            var redo = ac ? Math.round(aa * selChars / ac) : 0;   // 바꾼 문장을 다시 검사했을 때 그래도 잡힌 글자(바꾼 분량 기준)
-            var afterAi = Math.max(0, ai - selChars) + redo;   // 안 바꾼 검출 문장 + 바꾼 문장의 재검사 결과
+            var selChars = sel.reduce(function (a2, x) { return a2 + noSp(x.t); }, 0), selAi = sel.reduce(function (a2, x) { return a2 + shareOf(x) * noSp(x.t); }, 0);
+            var redo = ac ? Math.round(aa * selChars / ac) : 0;   // 2.1 다듬은 문장을 다시 잰 AI 몫(글자, 바꾼 분량 기준)
+            var afterAi = Math.max(0, cur - selAi) + redo;   // 2.1 안 바꾼 문장의 AI 몫 + 바꾼 문장을 다시 잰 AI 몫
             var rem = tp === 'plain' && RT.parts > 0 && RT.pn === RT.parts;   // 2.0 말투를 바꾸면 고르지 않은 문장도 다시 잰 값(am.punc)
             if (rem) afterAi = redo + RT.pa;
             var afterRate = total ? Math.round(afterAi * 100 / total) : 0;
-            var restN = flagged.length - sel.length, restChars = ai - selChars;
+            var done = {}; sel.forEach(function (x) { done[x._i] = 1; });
+            var restN = Math.max(0, flaggedN - sel.filter(function (x) { return x.ai; }).length), restChars = Math.round(afterAi);
             if (rem) { restChars = RT.pa; if (!RT.pa) restN = 0; }
             var tnote = tp === 'plain' ? '보고서 · 논설문 글이라 \'~습니다\'를 \'~다\' 말투로 바꿔 다듬었습니다.' + (tn.miss || RT.miss ? ' 말투를 바꾸지 못한 곳은 원래 말투로 두었습니다' + (tn.note || RT.note ? '(' + (tn.note || RT.note).replace(/[.\s]+$/, '') + ')' : '') + '.' : '') : '';
-            S.hum = { src: t, text: text, changed: pairs.filter(function (q) { return q.a !== q.b; }).length, pairs: pairs, before: N.rate, after: afterRate, target: target, restN: restN, restChars: restChars, aiN: N.aiN, redo: redo, rem: rem, toneNote: tnote };
+            S.hum = { src: t, text: text, changed: pairs.filter(function (q) { return q.a !== q.b; }).length, pairs: pairs, before: N.rate, after: afterRate, target: target, restN: restN, restChars: restChars, aiN: N.aiN, redo: redo, rem: rem, toneNote: tnote, done: done };
             setStep(3); CH.pass.refresh().then(CH.paintChip);
             show(planResultHtml(S.hum)); bindOut();
             if (window.gtag) try { window.gtag('event', 'humanize_plan', { target: target, chars: selChars }); } catch (e) { /* 무시 */ }
@@ -635,18 +642,18 @@
     }
     function planResultHtml(res) {
       var LVK = { hi: 'AI 패턴', mid: 'AI 패턴', low: 'AI 패턴' };
-      var okTarget = res.target ? res.after < res.target : res.after === 0;
+      var okTarget = res.target ? res.after < res.target : res.after < 20;   // 2.1 '모두 다듬기'는 안전(20% 미만)이면 맞춤
       var t = S.lastT || '';
       var restHtml = '';
       if (res.restN > 0) {
         var N2 = Object.assign({}, S.res, { full: true, rate: res.after, aiChars: res.restChars, aiN: res.restN });
-        var rows = planRows(N2, t).filter(function (r) { return r.target === 0 || r.target < (res.target || 100); });
+        var rows = planRows(N2, t, res.done).filter(function (r) { return r.target === 0 || r.target < (res.target || 100); });
         restHtml = '<section class="pay"><div class="pay-h"><span class="eyebrow">남은 AI 패턴 문장</span><h3>아직 ' + res.restN + '개 문장이 AI 패턴으로 남아 있습니다</h3><p>' + (res.target ? '목표 ' + res.target + '% 미만' + (okTarget ? '은 맞췄지만' : '에 아직 못 미쳐') + ', ' : '') + '마저 다듬으면 더 내려갑니다. 다듬는 비용만 빠집니다.</p></div>' + (rows.length ? planTable(rows, { allLabel: '남은 문장 모두', allBtn: '남은 문장 모두 다듬기' }) : '') + '</section>';
       }
       return '<article class="rep"><header class="rep-h"><div><small>' + (res.target ? '목표 ' + res.target + '% 미만 다듬기' : 'AI 패턴 문장 모두 다듬기') + '</small><h3>' + (okTarget ? '목표를 맞췄습니다' : '다듬었지만 목표에 조금 못 미쳤습니다') + '</h3></div><dl class="rep-meta"><dt>처리일시</dt><dd>' + nowStr() + '</dd><dt>바꾼 문장</dt><dd>' + res.changed + ' / ' + res.pairs.length + '</dd></dl></header>' +
-        '<div class="rep-sec"><div class="hz-stats"><div class="hz-stat"><span>다듬기 전 AI 작성률</span><b>' + res.before + '%</b></div><div class="hz-stat"><span>다듬은 뒤 AI 작성률</span><b class="down">' + res.after + '%</b></div><div class="hz-stat"><span>바꾼 문장이 다시 잡힌 글자</span><b>' + CH.n(res.redo) + '자</b></div></div>' +
+        '<div class="rep-sec"><div class="hz-stats"><div class="hz-stat"><span>다듬기 전 AI 작성률</span><b>' + res.before + '%</b></div><div class="hz-stat"><span>다듬은 뒤 AI 작성률</span><b class="down">' + res.after + '%</b></div><div class="hz-stat"><span>다듬은 문장에 남은 AI 몫</span><b>' + CH.n(res.redo) + '자</b></div></div>' +
         (res.toneNote ? '<p class="fine">' + esc(res.toneNote) + '</p>' : '') +
-        '<p class="fine">' + (res.rem ? '다듬은 뒤 수치는 바꾼 문장과 말투만 바꾼 나머지 문장을 같은 기준으로 다시 잰 값입니다.' : '다듬은 뒤 수치는 바꾼 문장을 다시 검사한 결과에 바꾸지 않은 AI 패턴 문장을 더한 값입니다.') + ' 다른 검사기를 보장하지 않습니다.</p>' +
+        '<p class="fine">' + (res.rem ? '다듬은 뒤 수치는 바꾼 문장과 말투만 바꾼 나머지 문장을 같은 기준으로 다시 잰 값입니다.' : '다듬은 뒤 수치는 바꾼 문장을 다시 잰 AI 몫에 바꾸지 않은 문장의 AI 몫을 더한 값입니다.') + ' 다른 검사기를 보장하지 않습니다.</p>' +
         '<div class="seg-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" data-tab="pairs">대조표</button><button type="button" role="tab" aria-selected="false" data-tab="full">반영한 전체 글</button></div>' +
         '<div data-pane="pairs" class="pairs">' + res.pairs.map(function (q, i) { return '<div class="pair"><div><small>' + (i + 1) + ' · ' + LVK[q.lv] + (q.p != null ? ' ' + q.p : '') + ' · 원문</small>' + esc(q.a) + '</div><div><small>다듬은 문장</small>' + diffHtml(q.a, q.b) + '</div></div>'; }).join('') + '</div>' +
         '<div data-pane="full" hidden><div class="doc" tabindex="0">' + diffHtml(res.src, res.text) + '</div></div>' +
