@@ -549,27 +549,32 @@
           for (var i = 0; i < flagged.length && (got < need || !target); i++) { sel.push(flagged[i]); got += noSp(flagged[i].t); }
           if (!sel.length) throw { message: '다듬을 AI 패턴 문장이 없습니다.' };
           sel.sort(function (a, b) { return a._i - b._i; });
+          /* 2026.11.09 HUM 1.9: 같은 문단에서 바로 이어진 고른 문장은 한 덩어리로 보냄. 엔진이 두 문장을 '~는데 · ~고 · ~지만'으로 이을 수 있어야
+             습니다체(자소서 · 에세이)도 내려감(문장 하나씩 보내면 잇지 못해 엔진 기준 100% 그대로). 덩어리 첫 문장 자리에 결과 전체, 나머지 자리는 비움 */
+          var groups = [], gc = null;
+          sel.forEach(function (x) { var tt = x.t.replace(/\s*\n+\s*/g, ' ').trim(), pi = x.para || 0; if (gc && gc.para === pi && gc.last === x._i - 1 && (gc.text.length + tt.length + 1) <= 900) { gc.text += ' ' + tt; gc.idx.push(x._i); gc.last = x._i; } else { gc = { para: pi, text: tt, idx: [x._i], last: x._i }; groups.push(gc); } });
           var parts = [], cur = null;
-          sel.forEach(function (x) { var tt = x.t.replace(/\s*\n+\s*/g, ' ').trim(); if (!cur || (cur.text.length + tt.length + 2) > CHUNK) { cur = { text: '', idx: [] }; parts.push(cur); } cur.text += (cur.text ? '\n\n' : '') + tt; cur.idx.push(x._i); });
-          var newT = {}, ac = 0, aa = 0, changed = 0;
+          groups.forEach(function (gg) { if (!cur || (cur.text.length + gg.text.length + 2) > CHUNK) { cur = { text: '', gs: [] }; parts.push(cur); } cur.text += (cur.text ? '\n\n' : '') + gg.text; cur.gs.push(gg); });
+          var newT = {}, GS = {}, ac = 0, aa = 0, changed = 0;
           show(progHtml('AI 점수 높은 문장부터 사람 말투로 바꾸는 중', 0, parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.', 'hum', sel.map(function (x) { return x.t; }).join(' ')));
           return seq(parts, function (pt, k) {
             return CH.call('am.humanize', { text: pt.text, tone: 'auto', variant: 0, pass: CH.pass.code }, 150000).then(function (r) {
               var outs = String(r.text || '').split(/\n{2,}/);
               if (r.aiAfter) { ac += r.aiAfter.chars || 0; aa += r.aiAfter.aiChars || 0; }
               changed += (r.stats && r.stats.changed) || (r.applied || []).length || 0;
-              if (outs.length === pt.idx.length) { pt.idx.forEach(function (ix, j) { newT[ix] = outs[j].trim(); }); return; }
-              return seq(pt.idx, function (ix) { return CH.call('am.humanize', { text: N.sentences[ix].t, tone: 'auto', variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { newT[ix] = (r2.text || N.sentences[ix].t).trim(); if (r2.aiAfter) { ac += r2.aiAfter.chars || 0; aa += r2.aiAfter.aiChars || 0; } }); });
+              if (outs.length === pt.gs.length) { pt.gs.forEach(function (gg, j) { gg.out = outs[j].trim(); }); return; }
+              return seq(pt.gs, function (gg) { return CH.call('am.humanize', { text: gg.text, tone: 'auto', variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { gg.out = (r2.text || gg.text).trim(); if (r2.aiAfter) { ac += r2.aiAfter.chars || 0; aa += r2.aiAfter.aiChars || 0; } }); });
             }).then(function () { show(progHtml('AI 점수 높은 문장부터 사람 말투로 바꾸는 중', k + 1, parts.length, '', 'hum', sel.map(function (x) { return x.t; }).join(' '))); });
           }).then(function () {
+            groups.forEach(function (gg) { if (gg.out == null || !gg.out) return; newT[gg.idx[0]] = gg.out; gg.idx.slice(1).forEach(function (ix) { newT[ix] = ''; GS[ix] = 1; }); });
             /* 고르지 않은 문장: 대표 수정 규칙 · 쉼표 · 가운뎃점 정리만(am.punc, 토큰 없음). 실패하면 원문 그대로 */
             return puncRest(N, newT);
           }).then(function (RT) {
-            /* 글 다시 짜기: 엔진이 나눈 문장 순서대로, 문단은 빈 줄로 */
+            /* 글 다시 짜기: 엔진이 나눈 문장 순서대로, 문단은 빈 줄로(덩어리로 다듬은 문장은 첫 자리에 한 번만) */
             var paras = [], pairs = [];
-            N.sentences.forEach(function (x, i) { if (RT.skip[i]) return; var pi = x.para || 0; paras[pi] = paras[pi] || []; paras[pi].push(newT[i] != null ? newT[i] : (RT.t[i] != null ? RT.t[i] : x.t)); });
+            N.sentences.forEach(function (x, i) { if (RT.skip[i] || GS[i]) return; var pi = x.para || 0; paras[pi] = paras[pi] || []; paras[pi].push(newT[i] != null ? newT[i] : (RT.t[i] != null ? RT.t[i] : x.t)); });
             var text = paras.filter(Boolean).map(function (pp) { return pp.join(' '); }).join('\n\n');
-            sel.forEach(function (x) { if (newT[x._i] != null) pairs.push({ lv: x.g === 3 ? 'hi' : x.g === 2 ? 'mid' : 'low', p: x.p, a: x.t, b: newT[x._i] }); });
+            groups.forEach(function (gg) { if (newT[gg.idx[0]] == null) return; var top = gg.idx.map(function (ix) { return N.sentences[ix]; }).sort(function (a, b) { return ((b.g || 0) - (a.g || 0)) || ((b.p || 0) - (a.p || 0)); })[0]; pairs.push({ lv: top.g === 3 ? 'hi' : top.g === 2 ? 'mid' : 'low', p: top.p, a: gg.idx.map(function (ix) { return N.sentences[ix].t; }).join(' '), b: newT[gg.idx[0]] }); });
             var selChars = sel.reduce(function (a2, x) { return a2 + noSp(x.t); }, 0);
             var redo = ac ? Math.round(aa * selChars / ac) : 0;   // 바꾼 문장을 다시 검사했을 때 그래도 잡힌 글자(바꾼 분량 기준)
             var afterAi = Math.max(0, ai - selChars) + redo;   // 안 바꾼 검출 문장 + 바꾼 문장의 재검사 결과
