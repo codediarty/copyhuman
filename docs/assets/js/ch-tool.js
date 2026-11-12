@@ -278,7 +278,7 @@
     var sub = risky ? '글 전체를 사람 말투로 다듬고, 다듬은 글을 같은 판정 기준으로 다시 재서 전후 AI 작성률을 보여 드립니다. 뜻 · 숫자 · 인용은 그대로.' : '다른 검사기에서는 더 높게 나올 수 있습니다. 지금 다듬어 두면 어디서든 여유가 생깁니다.';
     return '<section class="pay" aria-label="다음 단계">' +
       '<div class="pay-h"><span class="eyebrow">AI 휴머나이징</span><h3>' + head + '</h3>' +
-      '<p>' + sub + ' 이 글 ' + CH.n(t.length) + '자 기준.</p></div>' + toneHtml(t) +
+      '<p>' + (risky ? '<b>AI 작성률에 필터링되는 문장을 인간화(휴머나이징)해 드립니다.</b> ' : '') + sub + ' 이 글 ' + CH.n(t.length) + '자 기준.</p></div>' + toneHtml(t) +
       '<div class="pay-opts">' + humCard(t, N) +
       '<div class="pay-opt"><h4>전체 결과만 먼저 보기</h4><p class="cost"><b>' + CH.tk(det) + '토큰</b>' + (det > 0 ? '' : ' · 600자 이하는 토큰 없이') + '</p>' +
       '<ul><li>AI 패턴 문장 ' + N.aiN + '개 전부의 위치와 AI 점수</li><li>표현별 AI 패턴과 바꿀 말</li></ul>' +
@@ -516,6 +516,11 @@
       opt = opt || {};
       if (S.busy) return;
       var t = S.src || S.ck ? canon(ta.value) : pasted(ta.value);
+      if (!noSp(t)) {   // 2026.11.13 넣은 글이 없으면 파일 먼저(파일은 올리면 바로 검사). 터치 화면은 글 칸에 커서를 두지 않음(자판이 안내를 가림)
+        say('검사할 파일을 먼저 넣어 주세요. 파일을 올리면 바로 검사하고, 글을 붙여 넣어도 됩니다.');
+        if (!(window.matchMedia && matchMedia('(hover: none), (pointer: coarse)').matches)) ta.focus();
+        return;
+      }
       if (noSp(t) < 60) { say('60자 이상 넣어 주세요. 문장이 몇 개는 있어야 판정할 수 있습니다.'); ta.focus(); return; }
       if (t.length > PAID_MAX) t = t.slice(0, PAID_MAX);
       say(''); saveDraft(); S.lastT = t; busy(true); setStep(2);
