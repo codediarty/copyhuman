@@ -256,23 +256,36 @@
       '<input type="checkbox" data-tone' + (sv.on ? ' checked' : '') + ' style="margin-top:4px;flex:none;width:18px;height:18px">' +
       '<span><b>말투를 \'~다\'로 바꿔서 다듬기</b> <small class="muted">보고서 · 과제 · 논설문</small><br><small>이 글은 \'~습니다\' 말투입니다. 판정 기준이 \'~습니다\'로 끝나는 문장을 AI 쪽으로 크게 봐서, 말투를 그대로 두면 문장을 바꿔도 AI 작성률이 잘 내려가지 않습니다. 발표문 · 안내문처럼 \'~습니다\'가 꼭 필요하면 끄세요.</small></span></label>';
   }
+  /* 2026.11.12 대표 요청(휴머나이징 방식 통일): 글 전체를 6,000자씩 같은 엔진(am.humanize)으로 다듬고, 서버가 같은 판정 기준으로 잰
+     전후 AI 작성률을 보여 줌(humanize()). 이것을 첫 선택으로 두고, 문장 일부만 고르는 목표별 다듬기는 '필요한 만큼만'으로 아래에 접어 둠 */
+  function humCard(t, N) {
+    var C = chunk(t), need = CH.costParts('pro', C.parts), hasPass = !!CH.pass.code, n = (N && N.aiN) || 0;
+    return '<div class="pay-opt rec" style="grid-column:1/-1"><h4>글 전체 AI 휴머나이징 <small class="muted" style="font-size:13px;font-weight:600">추천</small></h4>' +
+      '<p class="cost"><b>' + CH.tk(need) + '토큰</b> · 이 글 ' + CH.n(t.length) + '자 전체</p>' +
+      '<ul><li>' + (n ? 'AI 패턴 문장 ' + n + '개를 포함해 ' : '') + '글 전체의 AI 말버릇과 번역투를 사람 말투로 다듬기</li><li>짧게 끊긴 문장은 잇고, 뜻 · 숫자 · 이름 · 인용은 그대로</li><li>다듬은 글을 같은 판정 기준으로 다시 재서 전후 AI 작성률을 보여 드림</li></ul>' +
+      '<button class="btn btn-p btn-block" type="button" data-act="hum">' + (hasPass ? '글 전체 휴머나이징 시작' : '토큰 충전하고 글 전체 휴머나이징') + '</button></div>';
+  }
+  function planFold(rows) {   // 목표별 다듬기(문장 일부만): 접어 둔 두 번째 선택
+    if (!rows.length) return '';
+    return '<details class="plan-fold" style="margin:14px 0 0"><summary style="cursor:pointer;font-weight:700;padding:6px 0">필요한 만큼만 다듬기(목표 AI 작성률별, 문장 일부만)</summary>' +
+      '<p class="fine" style="margin:6px 0 10px">AI 점수가 높은 문장부터 목표에 필요한 만큼만 바꿉니다. 고르지 않은 문장은 그대로 남아, 가장 낮은 결과는 글 전체 휴머나이징에서 나옵니다.</p>' + planTable(rows) + planNote() + '</details>';
+  }
   function payHtml(N, t) {
     var C = chunk(t), det = CH.costParts('unit', C.parts), hasPass = !!CH.pass.code;
     var risky = N.band.key === 'unfit' || N.band.key === 'risk';
     var rows = planRows(N, t);
     var head = risky ? 'AI 패턴 문장 ' + N.aiN + '개 · 이대로 내면 AI 글로 걸러질 수 있습니다' : N.aiN > 0 ? 'AI 패턴 문장 ' + N.aiN + '개 · 지금 고치면 깨끗해집니다' : '제출 전에 한 번 더 확인하세요';
-    var sub = risky ? '목표를 고르면 AI 점수가 높은 문장부터 필요한 만큼만 사람 말투로 바꾸고, 같은 기준으로 다시 검사합니다. 뜻 · 숫자 · 인용은 그대로.' : '다른 검사기에서는 더 높게 나올 수 있습니다. 지금 다듬어 두면 어디서든 여유가 생깁니다.';
+    var sub = risky ? '글 전체를 사람 말투로 다듬고, 다듬은 글을 같은 판정 기준으로 다시 재서 전후 AI 작성률을 보여 드립니다. 뜻 · 숫자 · 인용은 그대로.' : '다른 검사기에서는 더 높게 나올 수 있습니다. 지금 다듬어 두면 어디서든 여유가 생깁니다.';
     return '<section class="pay" aria-label="다음 단계">' +
-      '<div class="pay-h"><span class="eyebrow">목표를 고르면 바로 다듬습니다</span><h3>' + head + '</h3>' +
+      '<div class="pay-h"><span class="eyebrow">AI 휴머나이징</span><h3>' + head + '</h3>' +
       '<p>' + sub + ' 이 글 ' + CH.n(t.length) + '자 기준.</p></div>' + toneHtml(t) +
-      (rows.length ? planTable(rows) + planNote() : '') +
-      '<div class="pay-opts">' +
+      '<div class="pay-opts">' + humCard(t, N) +
       '<div class="pay-opt"><h4>전체 결과만 먼저 보기</h4><p class="cost"><b>' + CH.tk(det) + '토큰</b>' + (det > 0 ? '' : ' · 600자 이하는 토큰 없이') + '</p>' +
       '<ul><li>AI 패턴 문장 ' + N.aiN + '개 전부의 위치와 AI 점수</li><li>표현별 AI 패턴과 바꿀 말</li></ul>' +
       '<button class="btn btn-g btn-block" type="button" data-act="full">' + (hasPass ? '전체 결과 열기' : '토큰 충전하고 전체 결과 보기') + '</button></div>' +
       '<div class="pay-opt"><h4>어떻게 바뀌는지 먼저 보기</h4><p class="cost"><b>무료</b> · 첫 문단만</p>' +
       '<ul><li>첫 문단을 사람 말투로 바꾼 모습</li><li>무엇을 왜 바꿨는지는 유료 결과에서</li></ul>' +
-      '<button class="btn btn-g btn-block" type="button" data-act="taste">첫 문단 무료로 보기</button></div></div>' +
+      '<button class="btn btn-g btn-block" type="button" data-act="taste">첫 문단 무료로 보기</button></div></div>' + planFold(rows) +
       '<div class="pay-foot"><span>토큰 코드가 있으신가요? <button class="btn btn-t btn-s" type="button" data-act="code">코드 넣기</button></span><span>논문 전체를 맡기려면 <a href="' + CH.url('expert') + '">전문가 휴머나이징</a></span></div></section>';
   }
   /* 결과확인서의 표시 영역: 영역(rg)별 글자 수, 큰 곳부터 */
@@ -556,8 +569,8 @@
     }
     function afterFullHtml(N, t) {
       var rows = planRows(N, t);
-      return '<section class="pay"><div class="pay-h"><span class="eyebrow">목표를 고르면 바로 다듬습니다</span><h3>' + (N.aiN ? 'AI 패턴 문장 ' + N.aiN + '개 · 이대로 내면 AI 글로 걸러질 수 있습니다' : 'AI 패턴 문장이 없습니다') + '</h3><p>AI 점수가 높은 문장부터 필요한 만큼만 바꾸고 같은 기준으로 다시 검사합니다. 전체 결과는 열려 있어 다듬는 비용만 빠집니다.</p></div>' + toneHtml(t) +
-        (rows.length ? planTable(rows) + planNote() : '') +
+      return '<section class="pay"><div class="pay-h"><span class="eyebrow">AI 휴머나이징</span><h3>' + (N.aiN ? 'AI 패턴 문장 ' + N.aiN + '개 · 이대로 내면 AI 글로 걸러질 수 있습니다' : 'AI 패턴 문장이 없습니다') + '</h3><p>글 전체를 사람 말투로 다듬고 같은 기준으로 다시 검사합니다. 전체 결과는 열려 있어 다듬는 비용만 빠집니다.</p></div>' + toneHtml(t) +
+        '<div class="pay-opts">' + humCard(t, N) + '</div>' + planFold(rows) +
         '<div class="acts"><button class="btn btn-g" type="button" data-act="taste">첫 문단 무료로 먼저 보기</button></div></section>';
     }
     /* 목표별 다듬기: (전체 결과가 없으면 먼저 열고) AI 점수 높은 문장부터 필요한 만큼 골라 사람 말투로 바꾼 뒤, 바꾼 문장을 같은 기준으로 다시 검사 */
