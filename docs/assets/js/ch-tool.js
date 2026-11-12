@@ -665,7 +665,7 @@
         '<div class="seg-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" data-tab="pairs">대조표</button><button type="button" role="tab" aria-selected="false" data-tab="full">반영한 전체 글</button></div>' +
         '<div data-pane="pairs" class="pairs">' + res.pairs.map(function (q, i) { return '<div class="pair"><div><small>' + (i + 1) + ' · ' + LVK[q.lv] + (q.p != null ? ' ' + q.p : '') + ' · 원문</small>' + esc(q.a) + '</div><div><small>다듬은 문장</small>' + diffHtml(q.a, q.b) + '</div></div>'; }).join('') + '</div>' +
         '<div data-pane="full" hidden><div class="doc" tabindex="0">' + diffHtml(res.src, res.text) + '</div></div>' +
-        '<div class="acts"><button class="btn btn-p" type="button" data-act="copy">다듬은 글 복사</button><button class="btn btn-g" type="button" data-act="copypairs">대조표 복사</button><button class="btn btn-g" type="button" data-act="docx">' + ico('down') + (S.src && S.src.doc ? '원래 형식(.' + S.src.kind + ')으로 받기' : '워드 파일로 받기') + '</button><button class="btn btn-g" type="button" data-act="again">다듬은 글로 다시 검사</button></div>' +
+        '<div class="acts"><button class="btn btn-p" type="button" data-act="copy">다듬은 글 복사</button><button class="btn btn-g" type="button" data-act="copypairs">대조표 복사</button><button class="btn btn-g" type="button" data-act="docx">' + ico('down') + dlLabel() + '</button><button class="btn btn-g" type="button" data-act="again">다듬은 글로 다시 검사</button></div>' +
         '<p class="fine">제출 전에 뜻 · 수치 · 인용이 원문과 같은지 꼭 읽어 보세요. 한글(HWP) 원본에는 대조표를 보며 같은 문장을 바꿔 넣으면 됩니다.</p></div></article>' + restHtml;
     }
 
@@ -739,7 +739,7 @@
         '<div class="rep-sec"><div class="hz-stats">' + (down ? '<div class="hz-stat"><span>다듬기 전 AI 작성률</span><b>' + res.before + '%</b></div><div class="hz-stat"><span>다듬은 뒤 AI 작성률</span><b class="down">' + res.after + '%</b></div>' : '') + '<div class="hz-stat"><span>바꾼 곳</span><b>' + CH.n(res.changed) + '</b></div></div>' +
         (res.tone ? '<p class="fine">' + esc(res.tone) + '</p>' : '') +
         '<div class="legend"><span class="l-new"><i></i>바뀐 문장</span></div><div class="doc" tabindex="0">' + diffHtml(res.src, res.text) + '</div>' +
-        '<div class="acts"><button class="btn btn-p" type="button" data-act="copy">다듬은 글 복사</button><button class="btn btn-g" type="button" data-act="docx">' + ico('down') + (S.src && S.src.doc ? '원래 형식(.' + S.src.kind + ')으로 받기' : '워드 파일로 받기') + '</button><button class="btn btn-g" type="button" data-act="again">다듬은 글로 다시 검사</button></div>' +
+        '<div class="acts"><button class="btn btn-p" type="button" data-act="copy">다듬은 글 복사</button><button class="btn btn-g" type="button" data-act="docx">' + ico('down') + dlLabel() + '</button><button class="btn btn-g" type="button" data-act="again">다듬은 글로 다시 검사</button></div>' +
         '<p class="fine">다듬은 결과는 엔진 기준의 추정이며 다른 검사기의 결과를 보장하지 않습니다. 제출 전에 뜻 · 수치 · 인용이 원문과 같은지 꼭 읽어 보세요.</p></div></article>';
     }
     /* 맛보기(첫 문단) */
@@ -841,14 +841,27 @@
         });
       });
     }
+    /* 13.23 다듬은 글 받기: 올린 확장자 그대로. .hwp · .hwpx · .docx 는 원본에서 바뀐 문단만 갈아 끼우고(표 · 그림 · 각주 자리 그대로), .pdf 는 새로 조판, .txt · .md 는 같은 텍스트.
+       붙여 넣은 글과 결과확인서에서 꺼낸 글은 새 워드 파일 */
+    function outKind() { var s = S.src; if (!s) return 'docx'; return s.doc ? s.kind : /^(pdf|txt|md)$/.test(s.kind) ? s.kind : 'docx'; }
+    function dlLabel() { var k = outKind(); return S.src && k === S.src.kind ? '원래 형식(.' + k + ')으로 받기' : '워드 파일로 받기'; }
     function download() {
       if (!S.hum || !TI()) return;
-      var base = (S.docName || '카피휴먼').replace(/\.[a-z0-9]+$/i, '');
-      var p = S.src && S.src.doc ? TI().exportSame(S.src, S.hum.text) : Promise.resolve(null);
+      var T = TI(), s = S.src, k = outKind(), base = (S.docName || '카피휴먼').replace(/\.[a-z0-9]+$/i, '');
+      var cutAt = s && s.text && s.text.length > PAID_MAX ? PAID_MAX : 0;   // 한 번에 다듬는 글자 수를 넘는 파일은 뒤쪽 원래 글을 이어 붙임
+      var whole = S.hum.text + (cutAt ? s.text.slice(cutAt) : '');
+      var fail = function () { CH.toast('파일을 만들지 못했어요. 복사해서 붙여 넣어 주세요.'); };
+      if (k === 'txt' || k === 'md') { T.save(new Blob([whole.replace(/\n/g, '\r\n')], { type: 'text/plain;charset=utf-8' }), base + '_다듬은글.' + k); return; }
+      if (k === 'pdf' && T.newPdf) {
+        CH.toast('PDF를 만드는 중입니다. 글을 새로 조판하므로 그림과 표 배치는 옮기지 못합니다.');
+        T.newPdf(whole, base).then(function (b) { T.save(b, base + '_다듬은글.pdf'); }).catch(fail);
+        return;
+      }
+      var p = s && s.doc ? T.exportSame(s, S.hum.text, { cutAt: cutAt }).catch(function () { return null; }) : Promise.resolve(null);
       p.then(function (r) {
-        if (r && r.blob) { TI().save(r.blob, base + '_다듬은글.' + r.ext); return; }
-        return TI().newDocx(S.hum.text, base).then(function (b) { TI().save(b, base + '_다듬은글.docx'); });
-      }).catch(function () { CH.toast('파일을 만들지 못했어요. 복사해서 붙여 넣어 주세요.'); });
+        if (r && r.blob) { T.save(r.blob, base + '_다듬은글.' + r.ext); if (r.kept) CH.toast('각주나 링크 글이 바뀐 문단 ' + r.kept + '개는 원래 글 그대로 두었어요.'); return; }
+        return T.newDocx(S.hum.text, base).then(function (b) { T.save(b, base + '_다듬은글.docx'); });
+      }).catch(fail);
     }
 
     /* 바로 결제하고 돌아왔으면 하려던 일을 이어서 */

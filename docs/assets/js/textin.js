@@ -1,11 +1,12 @@
-/* 글 꺼내기 12.1 (2026.10.21)
+/* 글 꺼내기 13.23 (2026.11.12)
    파일에서 글만 꺼내 검사 칸에 넣고, 휴머나이징한 글을 같은 형식의 파일로 다시 만듭니다.
    - 모두 이 브라우저 안에서 처리합니다. 파일은 서버로 보내지 않습니다(서버에는 검사할 글만 감).
    - 한글: .hwp(5.0, 복합 문서 + 압축 풀기) · .hwpx(묶음 + XML) / 워드: .docx / PDF(pdf.js) / 텍스트: .txt · .md(UTF-8 · UTF-16 · EUC-KR 자동)
    - 문단은 빈 줄(\n\n)로 나눕니다. 붙여 넣은 글과 같은 정리 규칙(canon)을 지나므로 같은 글은 같은 결과가 나옵니다.
    - 머리말 · 꼬리말 · 각주 · 미주 · 숨은 설명 · 지운 글(변경 추적)은 빼고 본문, 표, 글상자 글은 넣습니다.
-   - 다시 만들기: .docx · .hwpx 는 원본 파일에서 바뀐 문단의 글만 바꿔 서식 · 표 · 그림을 그대로 두고,
-     그 밖(.hwp · .pdf · .txt · 붙여 넣은 글)은 새 .docx 로 만듭니다. */
+   - 다시 만들기(13.23: 올린 확장자 그대로): .docx · .hwpx · .hwp 는 원본 파일에서 바뀐 문단의 글만 바꿔 서식 · 표 · 그림 · 각주를 그대로 두고,
+     .pdf 는 다듬은 글을 새로 조판한 PDF 로(그림 · 표 배치는 옮기지 못함), .txt · .md 는 같은 텍스트로, 붙여 넣은 글은 새 .docx 로 만듭니다.
+     .hwp 는 복합 문서를 풀어 본문 구역의 문단 글 레코드만 새로 쓰고 다시 묶습니다(나머지 바이트는 그대로). */
 (function (G) {
   'use strict';
   var ROOT = (document.body && document.body.getAttribute('data-root')) || '/';
@@ -211,7 +212,7 @@
     for (i = 0; i + 128 <= dirB.length; i += 128) {
       var e = new DataView(dirB.buffer, dirB.byteOffset + i, 128), nl = e.getUint16(64, true), nm = '';
       for (j = 0; j + 1 < nl - 2 && j < 64; j += 2) nm += String.fromCharCode(e.getUint16(j, true));
-      ents.push({ name: nm, type: e.getUint8(66), l: e.getUint32(68, true), r: e.getUint32(72, true), c: e.getUint32(76, true), start: e.getUint32(116, true), size: e.getUint32(120, true) });
+      ents.push({ i: ents.length, name: nm, type: e.getUint8(66), l: e.getUint32(68, true), r: e.getUint32(72, true), c: e.getUint32(76, true), start: e.getUint32(116, true), size: e.getUint32(120, true) });
     }
     var root = ents[0]; if (!root || root.type !== 5) throw err('한글 파일 구조를 읽지 못했어요.');
     var miniFat = new Uint32Array(0), mini = new Uint8Array(0);
@@ -223,14 +224,15 @@
       if (id >= ents.length || id === 0xFFFFFFFF || depth > 64) return;
       var e = ents[id]; if (!e || e.seen) return; e.seen = 1;
       walk(e.l, pre, depth + 1);
-      var p = pre + e.name; paths[p] = e;
+      var p = pre + e.name; paths[p] = e; e.path = p;
       if (e.type === 1) walk(e.c, p + '/', depth + 1);
       walk(e.r, pre, depth + 1);
     })(root.c, '', 0);
     return {
       has: function (p) { return !!paths[p]; },
       list: function (re) { return Object.keys(paths).filter(function (p) { return re.test(p) && paths[p].type === 2; }); },
-      read: function (p) { var e = paths[p]; if (!e || e.type !== 2) return null; return e.size < cut ? readMini(e.start, e.size) : readBig(e.start, e.size); }
+      read: function (p) { var e = paths[p]; if (!e || e.type !== 2) return null; return e.size < cut ? readMini(e.start, e.size) : readBig(e.start, e.size); },
+      _w: { u8: u8, ss: ss, mss: mss, cut: cut, dirB: dirB, ents: ents }   // 다시 묶을 때(cfbWrite)
     };
   }
   function inflateRaw(u8) {
@@ -244,10 +246,10 @@
     return fflate().then(function (F) { return F.inflateSync(u8); });
   }
   var HWP_SKIP = { 'head': 1, 'foot': 1, 'fn  ': 1, 'en  ': 1, 'tcmt': 1 };   // 머리말 · 꼬리말 · 각주 · 미주 · 숨은 설명
-  function hwpParas(u8, list) {   // 레코드: 꼬리표 10비트 · 단계 10비트 · 크기 12비트
+  function hwpParas(u8, list, sec) {   // 레코드: 꼬리표 10비트 · 단계 10비트 · 크기 12비트. 문단마다 머리 레코드 자리(at)와 구역 번호(sec)
     var dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), o = 0, skipLv = -1, cur = null;
     while (o + 4 <= u8.length) {
-      var h = dv.getUint32(o, true), tag = h & 0x3FF, lv = (h >>> 10) & 0x3FF, size = (h >>> 20) & 0xFFF; o += 4;
+      var r0 = o, h = dv.getUint32(o, true), tag = h & 0x3FF, lv = (h >>> 10) & 0x3FF, size = (h >>> 20) & 0xFFF; o += 4;
       if (size === 0xFFF) { if (o + 4 > u8.length) break; size = dv.getUint32(o, true); o += 4; }
       if (o + size > u8.length) break;
       if (skipLv >= 0) { if (lv > skipLv) { o += size; continue; } skipLv = -1; }
@@ -255,7 +257,7 @@
         var id = dv.getUint32(o, true), cid = String.fromCharCode((id >>> 24) & 255, (id >>> 16) & 255, (id >>> 8) & 255, id & 255);
         if (HWP_SKIP[cid]) skipLv = lv;
       } else if (tag === 66) {          // PARA_HEADER: 새 문단
-        cur = { text: '' }; list.push(cur);
+        cur = { text: '', at: r0, sec: sec || 0 }; list.push(cur);
       } else if (tag === 67 && cur) {   // PARA_TEXT
         var s = '', n = size >> 1;
         for (var i = 0; i < n; i++) {
@@ -282,12 +284,12 @@
     if (prop & 4) throw err('배포용(읽기 전용) 한글 문서는 글을 꺼낼 수 없어요. 글을 복사해 붙여 넣어 주세요.', 'LOCKED');
     var secs = C.list(/^BodyText\/Section\d+$/).sort(function (a, b) { return (+a.replace(/\D/g, '')) - (+b.replace(/\D/g, '')); });
     if (!secs.length) throw err('한글 파일에서 본문을 찾지 못했어요.');
-    var zip = !!(prop & 1), list = [];
-    return secs.reduce(function (p, name) {
-      return p.then(function () { var raw = C.read(name); return zip ? inflateRaw(raw) : raw; }).then(function (b) { hwpParas(b, list); });
+    var zip = !!(prop & 1), list = [], bufs = [];
+    return secs.reduce(function (p, name, k) {
+      return p.then(function () { var raw = C.read(name); return zip ? inflateRaw(raw) : raw; }).then(function (b) { bufs.push({ name: name, buf: b }); hwpParas(b, list, k); });
     }, Promise.resolve()).then(function () {
       var J = joinParas(list);
-      return { text: J.text, doc: null };
+      return { text: J.text, doc: { kind: 'hwp', C: C, u8: u8, zip: zip, secs: bufs, paras: J.paras } };
     }, function (e) { throw e && e.code ? e : err('한글 파일의 압축을 풀지 못했어요. 파일이 손상되지 않았는지 확인해 주세요.'); });
   }
 
@@ -539,33 +541,48 @@
   }
 
   /* ---------- 다시 만들기: 바뀐 문단만 갈아 끼우기 ---------- */
-  function bigrams(s) { var m = {}, t = String(s).replace(/\s+/g, ''); for (var i = 0; i < t.length - 1; i++) { var k = t.substr(i, 2); m[k] = (m[k] || 0) + 1; } return { m: m, n: Math.max(0, t.length - 1) }; }
-  function sim(a, b) { if (a === b) return 1; var A = bigrams(a), B = bigrams(b); if (!A.n || !B.n) return 0; var hit = 0; for (var k in A.m) if (B.m[k]) hit += Math.min(A.m[k], B.m[k]); return 2 * hit / (A.n + B.n); }
-  function align(olds, news) {   // 문단 맞추기: 개수가 같으면 1:1, 다르면 비슷한 것끼리(빠진 문단은 지움)
+  function bigrams(s) { var m = {}, ks = [], t = String(s).replace(/\s+/g, ''); for (var i = 0; i < t.length - 1; i++) { var k = t.substr(i, 2); if (m[k]) m[k]++; else { m[k] = 1; ks.push(k); } } return { m: m, k: ks, n: Math.max(0, t.length - 1) }; }
+  function simB(A, B) { if (!A.n || !B.n) return 0; var s = A, l = B, hit = 0; if (A.k.length > B.k.length) { s = B; l = A; } for (var q = 0; q < s.k.length; q++) { var v = l.m[s.k[q]]; if (v) hit += Math.min(s.m[s.k[q]], v); } return 2 * hit / (A.n + B.n); }
+  function sim(a, b) { if (a === b) return 1; return simB(bigrams(a), bigrams(b)); }
+  function align(olds, news) {   // 문단 맞추기: 개수가 같으면 1:1, 다르면 비슷한 것끼리(빠진 문단은 지움). 13.23: 대각선 둘레만 보고 글자 쌍은 한 번만 세어 빠르게
     var n = olds.length, m = news.length, i, j;
     if (n === m) return olds.map(function (o, k) { return [k, k]; });
-    if (n * m > 4000000) return null;
-    var S = [], B = [];
-    for (i = 0; i <= n; i++) { S.push(new Float64Array(m + 1)); B.push(new Uint8Array(m + 1)); }
-    for (i = 1; i <= n; i++) for (j = 1; j <= m; j++) {
-      var d = S[i - 1][j - 1] + sim(olds[i - 1], news[j - 1]) - 0.3, u = S[i - 1][j], l = S[i][j - 1];
-      if (d >= u && d >= l) { S[i][j] = d; B[i][j] = 1; } else if (u >= l) { S[i][j] = u; B[i][j] = 2; } else { S[i][j] = l; B[i][j] = 3; }
+    var band = Math.abs(n - m) + 60, Wd = 2 * band + 1;
+    if ((n + 1) * Wd > 6000000) return null;
+    var bo = olds.map(bigrams), bn = news.map(bigrams), S = new Float64Array((n + 1) * Wd), Bk = new Uint8Array((n + 1) * Wd);
+    var lo = function (r) { return Math.max(0, Math.round(r * m / Math.max(1, n)) - band); };   // 이 줄에서 보는 첫 칸(그 밖은 0)
+    var get = function (r, c) { var q = c - lo(r); return q >= 0 && q < Wd ? S[r * Wd + q] : 0; };
+    var sm = function (a, b) { if (olds[a] === news[b]) return 1; var A = bo[a], B = bn[b]; if (2 * Math.min(A.n, B.n) < 0.3 * (A.n + B.n)) return 0; return simB(A, B); };
+    for (i = 1; i <= n; i++) {
+      var l0 = lo(i), j1 = Math.min(m, l0 + Wd - 1);
+      for (j = Math.max(1, l0); j <= j1; j++) {
+        var d = get(i - 1, j - 1) + sm(i - 1, j - 1) - 0.3, u = get(i - 1, j), l = get(i, j - 1), q = i * Wd + (j - l0);
+        if (d >= u && d >= l) { S[q] = d; Bk[q] = 1; } else if (u >= l) { S[q] = u; Bk[q] = 2; } else { S[q] = l; Bk[q] = 3; }
+      }
     }
     var out = []; i = n; j = m;
-    while (i > 0 && j > 0) { if (B[i][j] === 1) { out.push([i - 1, j - 1]); i--; j--; } else if (B[i][j] === 2) { out.push([i - 1, -1]); i--; } else { out.push([-1, j - 1]); j--; } }
+    while (i > 0 && j > 0) { var qq = j - lo(i), b = qq >= 0 && qq < Wd ? Bk[i * Wd + qq] : 0; if (b === 1) { out.push([i - 1, j - 1]); i--; j--; } else if (b === 2) { out.push([i - 1, -1]); i--; } else { out.push([-1, j - 1]); j--; } }
     while (i > 0) { out.push([i - 1, -1]); i--; } while (j > 0) { out.push([-1, j - 1]); j--; }
     return out.reverse();
   }
-  function plan(doc, newText) {   // [{p: 문단, text: 새 글 | null(지움)}]
-    var olds = doc.paras.map(function (p) { return p.clean; }), news = canon(newText).split(/\n{2,}/).map(function (s) { return s.trim(); }).filter(Boolean);
-    var A = align(olds, news); if (!A) return null;
-    var res = [], last = null;
+  function plan(doc, newText) {   // [{p: 문단, text: 새 글 | ''(지움)}]. 13.23: 문단 안에 빈 줄이 든 문단은 조각으로 나눠 맞춘 뒤 다시 합침(문단 수가 어긋나지 않게)
+    var units = [], owner = [];
+    doc.paras.forEach(function (p, i) { p.clean.split(/\n{2,}/).forEach(function (u) { units.push(u); owner.push(i); }); });
+    var news = canon(newText).split(/\n{2,}/).map(function (s) { return s.trim(); }).filter(Boolean);
+    var A = align(units, news); if (!A) return null;
+    var acc = doc.paras.map(function () { return null; }), cur = -1, pre = '';
     A.forEach(function (x) {
-      if (x[0] >= 0) { last = { p: doc.paras[x[0]], text: x[1] >= 0 ? news[x[1]] : '' }; res.push(last); }
-      else if (last) last.text = (last.text ? last.text + '\n' : '') + news[x[1]];   // 새로 생긴 문단은 앞 문단 끝에
-      else if (res.length === 0 && doc.paras[0]) { last = { p: doc.paras[0], text: news[x[1]], pre: true }; res.push(last); }
+      if (x[0] >= 0) {
+        var i = owner[x[0]], t = x[1] >= 0 ? news[x[1]] : '';
+        if (acc[i] == null) acc[i] = t; else if (t) acc[i] += (acc[i] ? '\n\n' : '') + t;
+        cur = i;
+      } else if (cur >= 0) acc[cur] += (acc[cur] ? '\n' : '') + news[x[1]];   // 새로 생긴 문단은 앞 문단 끝에
+      else pre += (pre ? '\n' : '') + news[x[1]];
     });
-    return res.filter(function (r) { return r.text !== r.p.clean; });
+    if (pre && acc.length) acc[0] = pre + (acc[0] ? '\n' + acc[0] : '');
+    var res = [];
+    doc.paras.forEach(function (p, i) { var t = acc[i] == null ? '' : acc[i]; if (t !== p.clean) res.push({ p: p, text: t }); });
+    return res;
   }
   /* 바뀐 문단에 새 글 넣기(12.1): 각주 번호 · 그림 · 쪽 나눔처럼 글이 없는 자리와, 링크 · 필드(인용 · 누름틀) 글은 그대로 두고
      그 사이 글만 바꿈. 자리는 낱말 단위로 맞춰 옮기고, 링크 · 필드 글이 새 글에 그대로 없으면 그 문단은 원래 글로 둠(false) */
@@ -617,12 +634,45 @@
   function wdiff(a, b) {   // 낱말 · 빈칸 단위로 맞춤 → [[같음 '=' · 지움 '-' · 넣음 '+', 길이]]
     var A = a.match(/\s+|[^\s]+/g) || [], B = b.match(/\s+|[^\s]+/g) || [], n = A.length, m = B.length, ops = [], i, j;
     if (!n || !m) { if (n) ops.push(['-', a.length]); if (m) ops.push(['+', b.length]); return ops; }
-    if (n * m > 4000000) return null;
+    if (n * m > 4000000) return wdiffBig(A, B);   // 긴 문단(13.23): 예전에는 손대지 않았음
     var w = m + 1, dp = new Uint16Array((n + 1) * w);
     for (i = n - 1; i >= 0; i--) for (j = m - 1; j >= 0; j--) dp[i * w + j] = A[i] === B[j] ? dp[(i + 1) * w + j + 1] + 1 : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1]);
     i = 0; j = 0;
     while (i < n && j < m) { if (A[i] === B[j]) { ops.push(['=', A[i].length]); i++; j++; } else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) ops.push(['-', A[i++].length]); else ops.push(['+', B[j++].length]); }
     while (i < n) ops.push(['-', A[i++].length]); while (j < m) ops.push(['+', B[j++].length]);
+    return ops;
+  }
+  function wdiffBig(A, B) {   // 긴 문단: 반씩 나눠 맞춤(히르시버그). 메모리는 한 줄만 쓰고, 작은 조각은 위와 같은 방식으로
+    var n = A.length, m = B.length, i;
+    if (n * m > 400000000) return null;
+    var ids = Object.create(null), nid = 0, ia = new Int32Array(n), ib = new Int32Array(m), ops = [];
+    for (i = 0; i < n; i++) ia[i] = ids[A[i]] !== undefined ? ids[A[i]] : (ids[A[i]] = nid++);
+    for (i = 0; i < m; i++) ib[i] = ids[B[i]] !== undefined ? ids[B[i]] : (ids[B[i]] = nid++);
+    function leaf(a0, a1, b0, b1) {
+      var nn = a1 - a0, mm = b1 - b0, w = mm + 1, dp = new Uint16Array((nn + 1) * w), i, j;
+      for (i = nn - 1; i >= 0; i--) for (j = mm - 1; j >= 0; j--) dp[i * w + j] = ia[a0 + i] === ib[b0 + j] ? dp[(i + 1) * w + j + 1] + 1 : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1]);
+      i = 0; j = 0;
+      while (i < nn && j < mm) { if (ia[a0 + i] === ib[b0 + j]) { ops.push(['=', A[a0 + i].length]); i++; j++; } else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) ops.push(['-', A[a0 + i++].length]); else ops.push(['+', B[b0 + j++].length]); }
+      while (i < nn) ops.push(['-', A[a0 + i++].length]); while (j < mm) ops.push(['+', B[b0 + j++].length]);
+    }
+    function row(a0, a1, b0, b1, rev) {   // 같은 낱말 수(LCS) 한 줄
+      var mm = b1 - b0, prev = new Int32Array(mm + 1), cur = new Int32Array(mm + 1), i, j, t;
+      for (i = a0; i < a1; i++) {
+        var x = rev ? ia[a1 - 1 - (i - a0)] : ia[i];
+        for (j = 1; j <= mm; j++) cur[j] = x === (rev ? ib[b1 - j] : ib[b0 + j - 1]) ? prev[j - 1] + 1 : (prev[j] >= cur[j - 1] ? prev[j] : cur[j - 1]);
+        t = prev; prev = cur; cur = t;
+      }
+      return prev;
+    }
+    (function go(a0, a1, b0, b1) {
+      var nn = a1 - a0, mm = b1 - b0, i;
+      if (!nn) { for (i = b0; i < b1; i++) ops.push(['+', B[i].length]); return; }
+      if (!mm) { for (i = a0; i < a1; i++) ops.push(['-', A[i].length]); return; }
+      if (nn * mm <= 4000000) return leaf(a0, a1, b0, b1);
+      var mid = (a0 + a1) >> 1, L = row(a0, mid, b0, b1, false), R = row(mid, a1, b0, b1, true), best = -1, bk = 0;
+      for (i = 0; i <= mm; i++) { var v = L[i] + R[mm - i]; if (v > best) { best = v; bk = i; } }
+      go(a0, mid, b0, b0 + bk); go(mid, a1, b0 + bk, b1);
+    })(0, n, 0, m);
     return ops;
   }
   function mapAfter(ops, r, O, N) {   // 원래 글 r 자리(앞 글자에 붙은 자리)를 새 글 자리로. 바뀐 말 안이면 같은 앞 · 뒷부분으로 맞추고, 아니면 바꾼 말 뒤로
@@ -744,12 +794,240 @@
     if (sib <= 1 || !plainPara(el)) { if (kind === 'docx') setDocxPara(el, ''); else setHwpxPara(el, ''); return; }
     par.removeChild(el);
   }
+  /* ---------- 한글 .hwp 다시 만들기(13.23): 원본 파일에서 바뀐 문단의 글만 ----------
+     복합 문서(CFB)를 풀어 본문 구역(BodyText/SectionN)의 문단 글 레코드만 새로 쓰고 다시 묶습니다.
+     표 · 그림 · 각주 · 머리말 · 글자 모양 · 문단 모양은 원래 바이트 그대로 둡니다. 줄 배치 기억(PARA_LINE_SEG)은 지워 한글이 다시 셉니다. */
+  function cfbWrite(C, repl) {   // 폴더 구조(디렉터리 항목)는 그대로 두고 흐름의 자리 · 크기만 새로
+    var Wd = C._w, ss = Wd.ss, mss = Wd.mss, cut = Wd.cut, ents = Wd.ents, EOC = 0xFFFFFFFE, FREE = 0xFFFFFFFF;
+    var bigs = [], minis = [], nBig = 0, nMini = 0, i, j;
+    ents.forEach(function (e) {
+      e._d = null;
+      if (e.type !== 2 || e.path == null) return;
+      var d = (repl && repl[e.path]) || C.read(e.path);
+      if (!d || !d.length) return;
+      e._d = d;
+      if (d.length < cut) { e._s = nMini; nMini += Math.ceil(d.length / mss); minis.push(e); }
+      else { e._s = nBig; nBig += Math.ceil(d.length / ss); bigs.push(e); }
+    });
+    var nMiniSec = Math.ceil(nMini * mss / ss), nMfSec = Math.ceil(nMini * 4 / ss), dirLen = Math.ceil(Wd.dirB.length / ss) * ss, nDirSec = dirLen / ss;
+    var nData = nBig + nMiniSec + nMfSec + nDirSec, epf = ss / 4, nFat = 0, nDif = 0;
+    for (;;) { var f = Math.ceil((nData + nFat + nDif) / epf), d2 = f > 109 ? Math.ceil((f - 109) / (epf - 1)) : 0; if (f === nFat && d2 === nDif) break; nFat = f; nDif = d2; }
+    var total = nData + nFat + nDif, out = new Uint8Array((total + 1) * ss), dv = new DataView(out.buffer);
+    var sMini = nBig, sMf = sMini + nMiniSec, sDir = sMf + nMfSec, sFat = sDir + nDirSec, sDif = sFat + nFat;
+    var at = function (sec) { return (sec + 1) * ss; };
+    var chainTo = function (tbl, s, n) { for (var k = 0; k < n; k++) tbl[s + k] = k + 1 < n ? s + k + 1 : EOC; };
+    var fat = new Uint32Array(nFat * epf), mf = new Uint32Array(nMfSec * epf);
+    for (i = 0; i < fat.length; i++) fat[i] = FREE;
+    for (i = 0; i < mf.length; i++) mf[i] = FREE;
+    bigs.forEach(function (e) { out.set(e._d, at(e._s)); chainTo(fat, e._s, Math.ceil(e._d.length / ss)); });
+    minis.forEach(function (e) { out.set(e._d, at(sMini) + e._s * mss); chainTo(mf, e._s, Math.ceil(e._d.length / mss)); });
+    chainTo(fat, sMini, nMiniSec); chainTo(fat, sMf, nMfSec); chainTo(fat, sDir, nDirSec);
+    for (i = 0; i < nFat; i++) fat[sFat + i] = 0xFFFFFFFD;
+    for (i = 0; i < nDif; i++) fat[sDif + i] = 0xFFFFFFFC;
+    for (i = 0; i < mf.length; i++) dv.setUint32(at(sMf) + i * 4, mf[i], true);
+    for (i = 0; i < fat.length; i++) dv.setUint32(at(sFat) + i * 4, fat[i], true);
+    var dir = new Uint8Array(dirLen), ddv = new DataView(dir.buffer);
+    dir.set(Wd.dirB);
+    for (i = Wd.dirB.length; i < dirLen; i += 128) { ddv.setUint32(i + 68, FREE, true); ddv.setUint32(i + 72, FREE, true); ddv.setUint32(i + 76, FREE, true); }
+    ents.forEach(function (e, k) {
+      var o = k * 128;
+      if (e.type === 5) { ddv.setUint32(o + 116, nMiniSec ? sMini : EOC, true); ddv.setUint32(o + 120, nMini * mss, true); ddv.setUint32(o + 124, 0, true); }
+      else if (e.type === 2) { ddv.setUint32(o + 116, e._d ? e._s : EOC, true); ddv.setUint32(o + 120, e._d ? e._d.length : 0, true); ddv.setUint32(o + 124, 0, true); }
+      e._d = null;
+    });
+    out.set(dir, at(sDir));
+    out.set(Wd.u8.subarray(0, 76));
+    dv.setUint32(40, ss === 4096 ? nDirSec : 0, true); dv.setUint32(44, nFat, true); dv.setUint32(48, sDir, true);
+    dv.setUint32(60, nMfSec ? sMf : EOC, true); dv.setUint32(64, nMfSec, true); dv.setUint32(68, nDif ? sDif : EOC, true); dv.setUint32(72, nDif, true);
+    for (i = 0; i < 109; i++) dv.setUint32(76 + i * 4, i < nFat ? sFat + i : FREE, true);
+    for (i = 0; i < nDif; i++) {
+      var base = at(sDif + i);
+      for (j = 0; j < epf - 1; j++) { var q = 109 + i * (epf - 1) + j; dv.setUint32(base + j * 4, q < nFat ? sFat + q : FREE, true); }
+      dv.setUint32(base + (epf - 1) * 4, i + 1 < nDif ? sDif + i + 1 : EOC, true);
+    }
+    return out;
+  }
+  function hwpRecAt(dv, o, len) {   // 레코드 하나의 머리
+    if (o + 4 > len) return null;
+    var h = dv.getUint32(o, true), size = (h >>> 20) & 0xFFF, b = o + 4;
+    if (size === 0xFFF) { if (b + 4 > len) return null; size = dv.getUint32(b, true); b += 4; }
+    if (b + size > len) return null;
+    return { tag: h & 0x3FF, lv: (h >>> 10) & 0x3FF, size: size, body: b, end: b + size };
+  }
+  function hwpRec(tag, lv, body) {
+    var n = body.length, big = n >= 0xFFF, out = new Uint8Array(4 + (big ? 4 : 0) + n), dv = new DataView(out.buffer);
+    dv.setUint32(0, (tag | (lv << 10) | ((big ? 0xFFF : n) << 20)) >>> 0, true);
+    if (big) dv.setUint32(4, n, true);
+    out.set(body, big ? 8 : 4);
+    return out;
+  }
+  function hwpParaRecs(buf, at) {   // 문단 머리와 바로 뒤의 글(67) · 글자 모양(68) · 줄 배치(69) · 영역 표시(70)
+    var dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength), H = hwpRecAt(dv, at, buf.length);
+    if (!H || H.tag !== 66 || H.size < 18) return null;
+    var R = { dv: dv, H: H, text: null, cs: null, ls: null, rt: null, headEnd: H.end, end: H.end, ctrls: 0 }, o = H.end, r, head = true;
+    while ((r = hwpRecAt(dv, o, buf.length)) && r.lv > H.lv) {
+      if (r.lv === H.lv + 1 && r.tag >= 67 && r.tag <= 70) {
+        var key = r.tag === 67 ? 'text' : r.tag === 68 ? 'cs' : r.tag === 69 ? 'ls' : 'rt';
+        if (!head || R[key]) return null;      // 순서가 예상과 다른 문단은 손대지 않음
+        R[key] = r; R.headEnd = r.end;
+      } else { head = false; if (r.lv === H.lv + 1 && r.tag === 71) R.ctrls++; }
+      o = r.end;
+    }
+    R.end = o; R.next = r;
+    return R;
+  }
+  var HWP_FLD_OPEN = { '%%me': 1, '%bmk': 1 };   // 메모 · 블록 책갈피 안의 글은 본문 글(고칠 수 있음). 링크 · 계산식 같은 필드 글은 지킴
+  function hwpNewUnits(U, text) {   // 문단 글(16비트 칸 배열)에 새 글을 넣음: 조종 문자(표 · 그림 · 각주 자리 등 8칸)와 필드 글은 그대로
+    var n = U.length, T = [], fld = 0, stack = [], i = 0, c, j, k, q;
+    if (!n || U[n - 1] !== 13) return null;
+    while (i < n - 1) {
+      c = U[i];
+      if (c >= 32 || c === 10 || c === 24 || c === 30 || c === 31) { T.push({ k: fld > 0 ? 's' : 't', u: i, n: 1, s: c >= 32 ? (c === 0xF53A ? '한' : String.fromCharCode(c)) : c === 10 ? '\n' : c === 24 ? '-' : ' ' }); i++; continue; }
+      if (c === 13) return null;
+      if (c === 0 || (c >= 25 && c <= 29)) { T.push({ k: 'a', u: i, n: 1 }); i++; continue; }
+      if (i + 8 > n - 1 || U[i + 7] !== c) return null;
+      if (c === 9) T.push(fld > 0 ? { k: 's', u: i, n: 8, s: ' ' } : { k: 'a', u: i, n: 8, w: ' ' });
+      else {
+        if (c === 3) { var open = !!HWP_FLD_OPEN[String.fromCharCode(U[i + 2] >> 8, U[i + 2] & 255, U[i + 1] >> 8, U[i + 1] & 255)]; stack.push(open); if (!open) fld++; }
+        else if (c === 4 && stack.length) { if (!stack.pop()) fld--; }
+        T.push({ k: 'a', u: i, n: 8 });
+      }
+      i += 8;
+    }
+    var O = '', oU = [], oC = [], B = [], last = null;
+    T.forEach(function (t) {
+      t.a = O.length;
+      if (t.k === 'a') { if (t.w) { O += t.w; oU.push(t.u); oC.push(0); } B.push(t); last = t; return; }
+      for (var z = 0; z < t.s.length; z++) { oU.push(t.u); oC.push(t.n === 1 ? 1 : 0); }
+      O += t.s;
+      if (t.k === 's') { if (last && last.k === 's') { last.s += t.s; last.n += t.n; } else { B.push(t); last = t; } }
+      else last = t;
+    });
+    var N = String(text).replace(/[\u0000-\u0009\u000B-\u001F]/g, ' ');
+    var lead = (/^\s*/.exec(O) || [''])[0], trail = lead.length < O.length ? (/\s*$/.exec(O) || [''])[0] : '';
+    if (N) N = lead + N + trail;   // 문단 앞뒤 빈칸(들여쓰기)은 그대로
+    var ops = wdiff(O, N); if (!ops) return null;
+    var cuts = [];
+    for (i = 0; i < B.length; i++) {
+      var t = B[i];
+      if (t.k === 'a') {
+        if (t.w) { var xw = mapExact(ops, t.a); if (xw >= 0 && /\s/.test(N.charAt(xw))) { cuts.push({ tok: t, s: xw, e: xw + 1 }); continue; } }
+        var x = mapAfter(ops, t.a, O, N); cuts.push({ tok: t, s: x, e: x }); continue;
+      }
+      if (!t.s.replace(/\s+/g, '')) { var z0 = mapAfter(ops, t.a, O, N), w0 = (/^\s*/.exec(N.slice(z0, z0 + t.s.length)) || [''])[0].length; cuts.push({ tok: t, s: z0, e: z0 + w0 }); continue; }
+      var y = mapExact(ops, t.a);
+      if (y < 0 || N.substr(y, t.s.length) !== t.s) return null;   // 필드 글이 바뀌었으면 이 문단은 원래 글 그대로
+      cuts.push({ tok: t, s: y, e: y + t.s.length });
+    }
+    for (k = 1; k < cuts.length; k++) if (cuts[k].s < cuts[k - 1].e) return null;
+    // 새 글 글자마다 원래 글자(같은 글자면 그 칸을 그대로, 새로 쓴 글자면 글자 모양만 따옴)
+    var src = new Int32Array(N.length), shp = new Int32Array(N.length), oP = 0, nP = 0;
+    for (i = 0; i < N.length; i++) { src[i] = -1; shp[i] = -1; }
+    k = 0;
+    while (k < ops.length) {
+      if (ops[k][0] === '=') { for (j = 0; j < ops[k][1]; j++) src[nP + j] = oP + j; oP += ops[k][1]; nP += ops[k][1]; k++; continue; }
+      var dl = 0, il = 0;
+      while (k < ops.length && ops[k][0] !== '=') { if (ops[k][0] === '-') dl += ops[k][1]; else il += ops[k][1]; k++; }
+      var cp = 0, cs = 0;
+      while (cp < dl && cp < il && O.charCodeAt(oP + cp) === N.charCodeAt(nP + cp)) cp++;
+      while (cs < dl - cp && cs < il - cp && O.charCodeAt(oP + dl - 1 - cs) === N.charCodeAt(nP + il - 1 - cs)) cs++;
+      for (j = 0; j < cp; j++) src[nP + j] = oP + j;
+      for (j = 0; j < cs; j++) src[nP + il - 1 - j] = oP + dl - 1 - j;
+      var rf = cp < dl - cs ? oP + cp : oP + cp > 0 ? oP + cp - 1 : oP + dl < O.length ? oP + dl : -1;
+      for (j = cp; j < il - cs; j++) shp[nP + j] = rf;
+      oP += dl; nP += il;
+    }
+    var out = [], ref = [], ex = [], WS = /\s/, from = 0, prevRef = T.length ? T[0].u : n - 1;
+    var put = function (code, r, e) { out.push(code); ref.push(r); ex.push(e); prevRef = r; };
+    var textRange = function (a, b) {
+      for (var p = a; p < b; p++) {
+        var so = src[p], ch = N.charCodeAt(p);
+        if (so >= 0 && oC[so]) { put(U[oU[so]], oU[so], oU[so]); continue; }
+        var r = so >= 0 ? oU[so] : shp[p] >= 0 ? oU[shp[p]] : prevRef;
+        put(ch === 10 ? 10 : ch < 32 ? 32 : ch, r, -1);
+      }
+    };
+    for (k = 0; k <= cuts.length; k++) {
+      var cA = k ? cuts[k - 1] : null, cB = k < cuts.length ? cuts[k] : null, a0 = from, b0 = cB ? cB.s : N.length, has = b0 > a0;
+      // 글 없는 자리(각주 · 그림) 앞뒤에 있던 빈칸은 그대로(새 글은 빈칸을 하나로 줄였으므로)
+      if (cA && cA.tok.k === 'a' && !cA.tok.w && has && WS.test(O.charAt(cA.tok.a)) && !WS.test(N.charAt(a0))) put(32, prevRef, -1);
+      textRange(a0, b0);
+      if (cB && cB.tok.k === 'a' && !cB.tok.w && has && cB.tok.a > 0 && WS.test(O.charAt(cB.tok.a - 1)) && !WS.test(N.charAt(b0 - 1))) put(32, prevRef, -1);
+      if (cB) { for (q = 0; q < cB.tok.n; q++) put(U[cB.tok.u + q], cB.tok.u + q, cB.tok.u + q); from = cB.e; }
+    }
+    put(13, n - 1, n - 1);
+    return { units: out, ref: ref, ex: ex };
+  }
+  function hwpEditPara(buf, at, text) {   // → {from, to, bytes}: 이 문단의 머리 묶음을 갈아 끼울 바이트. 못 바꾸면 null
+    var R = hwpParaRecs(buf, at); if (!R || !R.cs) return null;
+    var dv = R.dv, H = R.H, n0 = dv.getUint32(H.body, true), nOld = n0 & 0x7FFFFFFF, U, i;
+    if (R.text) { if (R.text.size !== nOld * 2) return null; U = new Uint16Array(nOld); for (i = 0; i < nOld; i++) U[i] = dv.getUint16(R.text.body + i * 2, true); }
+    else { if (nOld !== 1) return null; U = new Uint16Array([13]); }
+    var nCs = R.cs.size >> 3, cs = [];
+    for (i = 0; i < nCs; i++) cs.push([dv.getUint32(R.cs.body + i * 8, true), dv.getUint32(R.cs.body + i * 8 + 4, true)]);
+    if (!nCs || cs[0][0] !== 0) return null;
+    var X = hwpNewUnits(U, text); if (!X) return null;
+    var nu = X.units, nNew = nu.length, oldShape = new Int32Array(nOld), ci = 0;
+    for (i = 0; i < nOld; i++) { while (ci + 1 < nCs && cs[ci + 1][0] <= i) ci++; oldShape[i] = cs[ci][1]; }
+    var ncs = [], lastId = -1, mask = 0;
+    for (i = 0; i < nNew; i++) { var id = oldShape[X.ref[i]]; if (!i || id !== lastId) { ncs.push(i, id); lastId = id; } }
+    if (ncs.length / 2 > 0xFFFF) return null;
+    for (i = 0; i < nNew; i++) { var c = nu[i]; if (c < 32) { if (c !== 13) mask |= (1 << c); if (!(c === 0 || c === 10 || c === 13 || (c >= 24 && c <= 31))) i += 7; } }
+    var lv = H.lv + 1, parts = [], hb = new Uint8Array(buf.subarray(at, H.end)), hdv = new DataView(hb.buffer), h0 = H.body - at;
+    hdv.setUint32(h0, ((n0 & 0x80000000) | nNew) >>> 0, true); hdv.setUint32(h0 + 4, mask >>> 0, true); hdv.setUint16(h0 + 12, ncs.length / 2, true); hdv.setUint16(h0 + 16, 0, true);
+    parts.push(hb);
+    if (nNew > 1) { var tb = new Uint8Array(nNew * 2), tdv = new DataView(tb.buffer); for (i = 0; i < nNew; i++) tdv.setUint16(i * 2, nu[i], true); parts.push(hwpRec(67, lv, tb)); }
+    var cb = new Uint8Array(ncs.length * 4), cdv = new DataView(cb.buffer);
+    for (i = 0; i < ncs.length; i++) cdv.setUint32(i * 4, ncs[i], true);
+    parts.push(hwpRec(68, lv, cb));
+    if (R.rt) {   // 영역 표시(형광펜 등)의 자리도 새 글에 맞춤
+      var o2n = new Int32Array(nOld + 1), rb = new Uint8Array(buf.subarray(R.rt.body, R.rt.end)), rdv = new DataView(rb.buffer), nRt = (rb.length / 12) | 0;
+      for (i = 0; i <= nOld; i++) o2n[i] = -1;
+      for (i = 0; i < nNew; i++) if (X.ex[i] >= 0 && o2n[X.ex[i]] < 0) o2n[X.ex[i]] = i;
+      o2n[nOld] = nNew;
+      for (i = nOld - 1; i >= 0; i--) if (o2n[i] < 0) o2n[i] = o2n[i + 1];
+      for (i = 0; i < nRt; i++) { var s0 = Math.min(nOld, rdv.getUint32(i * 12, true)), e0 = Math.min(nOld, rdv.getUint32(i * 12 + 4, true)); rdv.setUint32(i * 12, o2n[s0], true); rdv.setUint32(i * 12 + 4, Math.max(o2n[s0], o2n[e0]), true); }
+      parts.push(hwpRec(70, lv, rb));
+    }
+    var len = 0; parts.forEach(function (p) { len += p.length; });
+    var bytes = new Uint8Array(len), w = 0; parts.forEach(function (p) { bytes.set(p, w); w += p.length; });
+    return { from: at, to: R.headEnd, bytes: bytes };
+  }
+  function hwpDropPara(buf, at) {   // 빠진 문단: 글만 있는 본문 문단이면 지우고, 표 · 그림이 들었거나 칸 · 구역의 끝 문단이면 글만 비움
+    var R = hwpParaRecs(buf, at); if (!R) return null;
+    var dv = R.dv, H = R.H, n0 = dv.getUint32(H.body, true), mask = dv.getUint32(H.body + 4, true), div = dv.getUint8(H.body + 11);
+    var charOnly = !(mask & ~((1 << 0) | (1 << 9) | (1 << 10) | (1 << 24) | (1 << 25) | (1 << 26) | (1 << 27) | (1 << 28) | (1 << 29) | (1 << 30) | (1 << 31)));
+    if (H.lv === 0 && at > 0 && !(n0 >>> 31) && charOnly && !div && !R.ctrls && R.next && R.next.tag === 66 && R.next.lv === 0) return { from: at, to: R.end, bytes: new Uint8Array(0) };
+    return hwpEditPara(buf, at, '');
+  }
+  function hwpExport(doc, P) {
+    var bySec = {}, kept = 0;
+    P.forEach(function (x) { (bySec[x.p.sec] = bySec[x.p.sec] || []).push(x); });
+    return fflate().then(function (F) {
+      var repl = {}, any = false;
+      Object.keys(bySec).forEach(function (k) {
+        var S = doc.secs[k], buf = S.buf, eds = [];
+        bySec[k].forEach(function (x) { var e = x.text ? hwpEditPara(buf, x.p.at, x.text) : hwpDropPara(buf, x.p.at); if (e) eds.push(e); else kept++; });
+        if (!eds.length) return;
+        eds.sort(function (a, b) { return a.from - b.from; });
+        var len = buf.length, i;
+        for (i = 0; i < eds.length; i++) { if (i && eds[i].from < eds[i - 1].to) throw err('한글 파일의 문단 자리를 맞추지 못했어요.'); len += eds[i].bytes.length - (eds[i].to - eds[i].from); }
+        var nb = new Uint8Array(len), w = 0, r = 0;
+        for (i = 0; i < eds.length; i++) { nb.set(buf.subarray(r, eds[i].from), w); w += eds[i].from - r; nb.set(eds[i].bytes, w); w += eds[i].bytes.length; r = eds[i].to; }
+        nb.set(buf.subarray(r), w);
+        repl[S.name] = doc.zip ? F.deflateSync(nb, { level: 6 }) : nb; any = true;
+      });
+      var bytes = any ? cfbWrite(doc.C, repl) : doc.u8;
+      return { blob: new Blob([bytes], { type: 'application/x-hwp' }), ext: 'hwp', changed: P.length - kept, kept: kept, bytes: bytes };
+    });
+  }
   var SER = function (dom) { return new XMLSerializer().serializeToString(dom).replace(/^(<\?xml[^>]*\?>)?/, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'); };
-  function exportSame(src, newText, opt) {   // 원본(.docx · .hwpx)에서 바뀐 문단만. opt.cutAt: 5만 자에서 잘라 넣은 글이면 뒤쪽은 원래 글 그대로
+  function exportSame(src, newText, opt) {   // 원본(.docx · .hwpx · .hwp)에서 바뀐 문단만. opt.cutAt: 5만 자에서 잘라 넣은 글이면 뒤쪽은 원래 글 그대로
     var doc = src && src.doc; if (!doc) return Promise.resolve(null);
     newText = canon(newText);
     if (opt && opt.cutAt > 0 && opt.cutAt < src.text.length) newText = newText + src.text.slice(opt.cutAt);
     var P = plan(doc, newText); if (!P) return Promise.resolve(null);
+    if (doc.kind === 'hwp') return hwpExport(doc, P);
     var kept = 0;
     P.forEach(function (x) {
       if (!x.text) return dropPara(x.p, doc.kind);
@@ -780,11 +1058,109 @@
       return z.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
     });
   }
+  /* ---------- 새 PDF(13.23): 다듬은 글을 A4에 새로 조판 ----------
+     PDF는 글자 자리가 고정된 형식이라 원본의 그림 · 표 배치는 옮기지 못합니다. 글만 새로 조판합니다(프리텐다드, 한자 등은 Noto Sans KR 보충 글꼴).
+     글꼴은 쓰인 글자만 넣으므로 파일이 작고, 다른 프로그램에서 글을 그대로 뽑을 수 있습니다. */
+  function pdflib() {
+    return script('assets/vendor/pdf-lib.min.js', function () { return window.PDFLib; }).then(function (L) {
+      return script('assets/vendor/fontkit.umd.min.js', function () { return window.fontkit; }).then(function (fk) { return { L: L, fk: fk }; });
+    });
+  }
+  var fontMemo = {};
+  function fontBytes(name) {
+    if (!fontMemo[name]) fontMemo[name] = fetch(ROOT + 'assets/vendor/fonts/' + name + (VER ? '?v=' + VER : '')).then(function (r) { if (!r.ok) throw err('글꼴을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'LOAD'); return r.arrayBuffer(); }).then(function (b) { return new Uint8Array(b); })
+      .catch(function (e) { fontMemo[name] = null; throw e && e.code ? e : err('글꼴을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.', 'LOAD'); });
+    return fontMemo[name];
+  }
+  function fkSafe(fk) {   // fontkit 보정: 글꼴을 줄일 때 글리프 길이가 홀수면 한 칸 채움(자리표가 짧은 형식이 되면 글리프가 깨지던 문제)
+    return { create: function (bytes, name) {
+      var f = fk.create(bytes, name), cs = f.createSubset;
+      f.createSubset = function () {
+        var s = cs.apply(f, arguments), add = s._addGlyph;
+        if (typeof add === 'function') s._addGlyph = function (gid) {
+          var r = add.call(s, gid), g = s.glyf, b = g && g[g.length - 1];
+          if (b && (b.length & 1)) { var nb = new b.constructor(b.length + 1); nb.set(b); g[g.length - 1] = nb; s.offset += 1; }
+          return r;
+        };
+        return s;
+      };
+      return f;
+    } };
+  }
+  function buildPdf(L, fk, f1, getF2, text, title) {
+    var pad = function (b) { var u = new Uint8Array(b.byteLength + 64); u.set(new Uint8Array(b.buffer || b, b.byteOffset || 0, b.byteLength)); return u; };   // 글꼴 끝의 빈 글리프를 읽다 넘치지 않게
+    var setOf = function (font) { var h = {}, cs = font.getCharacterSet(); for (var i = 0; i < cs.length; i++) h[cs[i]] = 1; return h; };
+    var src = String(text);
+    return L.PDFDocument.create().then(function (pdf) {
+      pdf.registerFontkit(fkSafe(fk));
+      if (title) pdf.setTitle(String(title));
+      return pdf.embedFont(pad(f1), { subset: true }).then(function (font) {
+        var has = setOf(font), need = false, k, c;
+        for (k = 0; k < src.length; k++) { c = src.codePointAt(k); if (c > 0xFFFF) k++; if (c > 32 && !has[c] && !/\s/.test(String.fromCodePoint(c))) { need = true; break; } }
+        if (!need || !getF2) return [font, has, null, {}];
+        return getF2().then(function (b) { return pdf.embedFont(pad(b), { subset: true }); }).then(function (font2) { return [font, has, font2, setOf(font2)]; }, function () { return [font, has, null, {}]; });
+      }).then(function (F) {
+        var font = F[0], has = F[1], font2 = F[2], has2 = F[3];
+        var PW = 595.28, PH = 841.89, MX = 72, MT = 76, MB = 76, SIZE = 10.5, LEAD = 17.6, GAP = 7, maxW = PW - MX * 2;
+        var sub = has[0x25A1] ? '\u25A1' : '?', wc = {}, i, ALT = { '\u223C': '~', '\u2981': '\u2022', '\u2219': '\u00B7', '\u22C5': '\u00B7', '\u2010': '-', '\u2011': '-', '\u2012': '-' };
+        var chars = function (s) { var o = [], c; for (var k = 0; k < s.length; k++) { c = s.codePointAt(k); if (c > 0xFFFF) k++; o.push(String.fromCodePoint(c)); } return o; };
+        var fid = function (ch) { var c = ch.codePointAt(0); return has[c] ? 0 : has2[c] ? 1 : -1; };
+        var clean = function (s) { return chars(s).map(function (ch) { return ch === ' ' || fid(ch) >= 0 ? ch : /\s/.test(ch) ? ' ' : ALT[ch] && fid(ALT[ch]) >= 0 ? ALT[ch] : sub; }).join(''); };
+        var cw = function (ch) { if (wc[ch] === undefined) wc[ch] = (fid(ch) === 1 ? font2 : font).widthOfTextAtSize(ch, SIZE); return wc[ch]; };
+        var wOf = function (s) { var w = 0, a = chars(s); for (var k = 0; k < a.length; k++) w += cw(a[k]); return w; };
+        var spW = cw(' '), lines = [];   // {words: [{t, w}], w, last, gap}
+        src.split(/\n{2,}/).forEach(function (para) {
+          para.split('\n').forEach(function (ln) {
+            var words = clean(ln).split(/ +/).filter(Boolean), cur = [], lw = 0;
+            var flush = function (last) { lines.push({ words: cur, w: lw, last: last, gap: 0 }); cur = []; lw = 0; };
+            words.forEach(function (t) {
+              var w = wOf(t);
+              while (w > maxW) {   // 한 줄보다 긴 낱말은 글자에서 끊음
+                if (cur.length) flush(false);
+                var a = chars(t), n = 0, acc = 0; while (n < a.length && acc + cw(a[n]) <= maxW) { acc += cw(a[n]); n++; }
+                n = Math.max(1, n); cur = [{ t: a.slice(0, n).join(''), w: acc }]; lw = acc; flush(false); t = a.slice(n).join(''); w = wOf(t);
+              }
+              if (!t) return;
+              if (cur.length && lw + spW + w > maxW) flush(false);
+              lw += (cur.length ? spW : 0) + w; cur.push({ t: t, w: w });
+            });
+            flush(true);
+          });
+          lines[lines.length - 1].gap = GAP;   // 문단 사이
+        });
+        var page = null, y = 0, no = 0;
+        var draw = function (t, x, yy, size, color) {   // 글꼴이 섞인 낱말은 글꼴별로 나눠
+          var a = font2 ? chars(t) : null, o = { x: x, y: yy, size: size, font: font };
+          if (color) o.color = color;
+          if (!a) { page.drawText(t, o); return; }
+          var run = '', rf = 0, flushRun = function () { if (!run) return; o.x = x; o.font = rf === 1 ? font2 : font; page.drawText(run, o); x += o.font.widthOfTextAtSize(run, size); run = ''; };
+          for (var k = 0; k < a.length; k++) { var f = fid(a[k]) === 1 ? 1 : 0; if (f !== rf) { flushRun(); rf = f; } run += a[k]; }
+          flushRun();
+        };
+        var newPage = function () { page = pdf.addPage([PW, PH]); no++; y = PH - MT; var s = '- ' + no + ' -'; draw(s, (PW - font.widthOfTextAtSize(s, 9)) / 2, 40, 9, L.rgb(0.4, 0.4, 0.4)); };
+        newPage();
+        lines.forEach(function (ln) {
+          if (y - SIZE < MB) newPage();
+          var n = ln.words.length, extra = 0, x = MX;
+          if (!ln.last && n > 1) { extra = (maxW - ln.w) / (n - 1); if (extra > spW * 2.2) extra = 0; }   // 양쪽 맞춤(너무 벌어지면 왼쪽 맞춤)
+          if (extra < 0.01 && n) draw(ln.words.map(function (w) { return w.t; }).join(' '), x, y - SIZE, SIZE);
+          else ln.words.forEach(function (w) { draw(w.t, x, y - SIZE, SIZE); x += w.w + spW + extra; });
+          y -= LEAD + ln.gap;
+        });
+        return pdf.save();
+      });
+    });
+  }
+  function newPdf(text, title) {
+    return Promise.all([pdflib(), fontBytes('Pretendard-Regular.ttf')]).then(function (R) {
+      return buildPdf(R[0].L, R[0].fk, R[1], function () { return fontBytes('NotoSansKR-Hanja.ttf'); }, canon(text), title);
+    }).then(function (bytes) { return new Blob([bytes], { type: 'application/pdf' }); });
+  }
   function save(blob, name) {   // 내려받기(이 브라우저에서 만든 파일)
     var a = document.createElement('a'), u = URL.createObjectURL(blob);
     a.href = u; a.download = name; a.rel = 'noopener'; document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(u); a.remove(); }, 4000);
   }
 
-  G.AMTextIn = { ACCEPT: ACCEPT, canon: canon, read: read, exportSame: exportSame, newDocx: newDocx, save: save, sim: sim, _t: { sniff: sniff, decodeText: decodeText, cfb: cfb, hwpParas: hwpParas, pdfLines: pdfLines, pdfParas: pdfParas, align: align, plan: plan, sim: sim, docxToks: docxToks, hwpxToks: hwpxToks, rewritePara: rewritePara } };
+  G.AMTextIn = { ACCEPT: ACCEPT, canon: canon, read: read, exportSame: exportSame, newDocx: newDocx, newPdf: newPdf, save: save, sim: sim, _t: { sniff: sniff, decodeText: decodeText, cfb: cfb, hwpParas: hwpParas, pdfLines: pdfLines, pdfParas: pdfParas, align: align, plan: plan, sim: sim, docxToks: docxToks, hwpxToks: hwpxToks, rewritePara: rewritePara, buildPdf: buildPdf, cfbWrite: cfbWrite, hwpNewUnits: hwpNewUnits, hwpEditPara: hwpEditPara, hwpExport: hwpExport, wdiff: wdiff } };
 })(window);
