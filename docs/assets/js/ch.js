@@ -44,14 +44,22 @@
     return c;
   };
 
-  /* ---------- 토큰 단가 ---------- */
-  CH.cost = function (kind, chars) {
-    var R = (CFG.rate || {})[kind] || { per: 100, cr: 0.2, min: 1, free: 0 };
-    if (R.free && chars <= R.free) return 0;
-    var units = Math.ceil(Math.max(1, chars) / R.per);
-    return Math.max(R.min, Math.round(units * R.cr * 10) / 10);
+  /* ---------- 토큰 단가 ----------
+     CFG.rate 는 지금 사는 토큰의 값입니다. 토큰 코드마다 서버가 그 코드의 값(pass.rm: 1 또는 예전에 산 코드 0.5)을 알려 주고,
+     도구 화면의 어림은 지금 넣은 코드의 값으로 보여 줍니다. rm 을 주지 않는 서버(예전 판)는 예전 값(CFG.oldMul)으로 빠집니다.
+     list 가 참이면 코드와 상관없이 표의 값(요금 계산기 · 충전 창). */
+  function rmOf(info) { return typeof info.rm === 'number' ? info.rm : (+CFG.oldMul || 1); }
+  CH.rateMul = function () {
+    var ps = CH.pass, i = ps && ps.info, m = i ? rmOf(i) : (ps && ps.code ? +CH.sget('ch_rm') : 0);
+    return m > 0 && m <= 1 ? m : 1;
   };
-  CH.costParts = function (kind, parts) { return Math.round(parts.reduce(function (a, p) { return a + CH.cost(kind, p.length); }, 0) * 10) / 10; };
+  CH.cost = function (kind, chars, list) {
+    var R = (CFG.rate || {})[kind] || { per: 100, cr: 0.4, min: 2, free: 0 };
+    if (R.free && chars <= R.free) return 0;
+    var units = Math.ceil(Math.max(1, chars) / R.per), m = list ? 1 : CH.rateMul();
+    return Math.round(Math.max(R.min, units * R.cr) * m * 10) / 10;
+  };
+  CH.costParts = function (kind, parts, list) { return Math.round(parts.reduce(function (a, p) { return a + CH.cost(kind, p.length, list); }, 0) * 10) / 10; };
 
   /* ---------- 엔진 서버(카피휴먼 서버) ---------- */
   var server = CH.server = { state: 'unknown', why: '' };   // unknown | ok | off
@@ -98,8 +106,8 @@
     norm: function (c) { return String(c || '').toUpperCase().replace(/[^0-9A-Z]/g, ''); },
     fmt: function (c) { return P.norm(c).replace(/(.{4})(?=.)/g, '$1-'); },
     left: function () { return P.info && typeof P.info.cr === 'number' ? P.info.cr : (P.info && typeof P.info.left === 'number' ? P.info.left : null); },
-    set: function (code, info) { P.code = P.fmt(code); P.info = info || null; CH.sset('ch_pass', P.code); paintChip(); },
-    clear: function () { P.code = ''; P.info = null; CH.sset('ch_pass', ''); paintChip(); },
+    set: function (code, info) { P.code = P.fmt(code); P.info = info || null; CH.sset('ch_pass', P.code); CH.sset('ch_rm', info ? String(rmOf(info)) : ''); paintChip(); },
+    clear: function () { P.code = ''; P.info = null; CH.sset('ch_pass', ''); CH.sset('ch_rm', ''); paintChip(); },
     check: function (code) {
       code = P.fmt(code);
       if (P.norm(code).length !== 16) return Promise.reject({ code: 'FORMAT', message: '토큰 코드는 16자리입니다. 메일에서 받은 코드를 그대로 넣어 주세요.' });
@@ -411,7 +419,7 @@
   $$('[data-calc]').forEach(function (el) {
     var r = $('input[type=range]', el), cd = $('#calcDet', el), ch = $('#calcHum', el), o = $('.calc-out', el), lab = $('[data-chars]', el);
     function paint() {
-      var n = +r.value, d = cd.checked ? CH.cost('unit', n) : 0, h = ch.checked ? CH.cost('pro', n) : 0, s = Math.round((d + h) * 10) / 10, p = recPack(s);
+      var n = +r.value, d = cd.checked ? CH.cost('unit', n, true) : 0, h = ch.checked ? CH.cost('pro', n, true) : 0, s = Math.round((d + h) * 10) / 10, p = recPack(s);
       lab.textContent = CH.n(n) + '자';
       o.innerHTML = '<div class="row"><span>AI 작성률 전체 결과</span><b>' + (cd.checked ? CH.tk(d) + '토큰' : '빼기') + '</b></div>' +
         '<div class="row"><span>AI 휴머나이징</span><b>' + (ch.checked ? CH.tk(h) + '토큰' : '빼기') + '</b></div>' +

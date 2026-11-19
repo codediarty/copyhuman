@@ -688,28 +688,34 @@
     }
 
     /* 토큰이 필요한 일: 코드가 없거나 모자라면 충전 창, 10토큰 넘으면 한 번 묻기 */
-    function journey() {   // 이 글을 검사 · 다듬기 · 다시 검사까지 하는 데 드는 토큰(충전 추천용)
+    function journey() {   // 이 글을 검사 · 다듬기 · 다시 검사까지 하는 데 드는 토큰(충전 추천용, 새로 사는 토큰의 값으로)
       var t = S.lastT || canon(ta.value), C = chunk(t);
-      return CH.costParts('unit', C.parts) * 2 + CH.costParts('pro', C.parts);
+      return CH.costParts('unit', C.parts, true) * 2 + CH.costParts('pro', C.parts, true);
     }
     function needLine(need, name) {
       return need > 0 ? '이 글 ' + esc(name) + ': <b>' + CH.tk(need) + '토큰</b>' : '600자 이하 글의 ' + esc(name) + '는 토큰이 빠지지 않습니다. 토큰 코드만 있으면 바로 열립니다.';
     }
     function gate(need, name, go, intent) {
-      var rn = Math.max(need, journey());
+      /* need 는 지금 넣은 코드의 값으로 센 토큰. 충전 창에는 새로 사는 토큰의 값(list)으로 보여 주고, 코드를 새로 넣으면 그 코드의 값으로 다시 셈 */
+      var rm0 = CH.rateMul(), list = Math.round(need / rm0 * 10) / 10, rn = Math.max(list, journey());
+      function again() { gate(Math.round(list * CH.rateMul() * 10) / 10, name, go, intent); }
       if (CH.server.state === 'off') {
         saveDraft();
-        CH.buy({ need: need, recNeed: rn, needText: needLine(need, name), title: '토큰으로 ' + name + ' 이어서 하기', intent: intent });
+        CH.buy({ need: list, recNeed: rn, needText: needLine(list, name), title: '토큰으로 ' + name + ' 이어서 하기', intent: intent });
         return;
       }
       if (!CH.pass.code) {
         saveDraft();
-        CH.buy({ need: need, recNeed: rn, needText: needLine(need, name), title: name + '에 쓸 토큰 충전', intent: intent, done: function () { askGo(need, name, go); } });
+        CH.buy({ need: list, recNeed: rn, needText: needLine(list, name), title: name + '에 쓸 토큰 충전', intent: intent, done: again });
         return;
       }
       var l = CH.pass.left();
       if (l != null && l < need) {
-        CH.buy({ need: need - l, recNeed: Math.max(need - l, rn - l), needText: '남은 토큰 <b>' + CH.tk(l) + '</b> · 필요한 토큰 <b>' + CH.tk(need) + '</b> · 모자란 토큰 <b>' + CH.tk(need - l) + '</b>', title: '토큰이 조금 모자라요', intent: intent, done: function () { askGo(need, name, go); } });
+        if (CH.payReady() && rm0 >= 1) {   // 지금 코드에 바로 더할 수 있을 때: 모자란 만큼만
+          CH.buy({ need: need - l, recNeed: Math.max(need - l, rn - l), needText: '남은 토큰 <b>' + CH.tk(l) + '</b> · 필요한 토큰 <b>' + CH.tk(need) + '</b> · 모자란 토큰 <b>' + CH.tk(need - l) + '</b>', title: '토큰이 조금 모자라요', intent: intent, done: again });
+        } else {   // 새로 충전한 토큰은 새 코드로 오므로, 새 코드가 이 일을 다 할 수 있는 토큰으로 보여 줌
+          CH.buy({ need: list, recNeed: rn, needText: '지금 코드에 남은 토큰 <b>' + CH.tk(l) + '</b> · 이 글 ' + esc(name) + '에 필요한 토큰 <b>' + CH.tk(need) + '</b><br>새로 충전한 토큰은 새 코드로 옵니다. 새 코드로는 이 글에 <b>' + CH.tk(list) + '토큰</b>이 듭니다.', title: '토큰이 모자라요', intent: intent, done: again });
+        }
         return;
       }
       askGo(need, name, go);
