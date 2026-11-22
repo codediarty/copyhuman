@@ -720,6 +720,9 @@ fieldset { min-inline-size: 0; }
 .pk-price { font-size: 15px; font-weight: 650; color: var(--ink2); font-variant-numeric: tabular-nums; }
 .pk-who { font-size: 12.5px; color: var(--mut); }
 .pk-price small { margin-left: 6px; font-size: 12.5px; font-weight: 600; color: var(--mut); }
+.pk-price s { margin-left: 6px; font-size: 12.5px; font-weight: 600; color: var(--mut); text-decoration-thickness: 1.5px; white-space: nowrap; }   /* 2026.11.22 충전 창 프로 · 맥스 줄 그은 금액(플러스 단가 기준) */
+.modal .pk-note { margin-top: -6px; }
+@media (max-width: 560px) { .modal .pk-price s { display: block; margin-left: 0; font-size: 11.5px; line-height: 1.35; } }
 .pk.best { border-color: color-mix(in srgb, var(--brand) 55%, transparent); }
 .pk-save { justify-self: start; font-size: 12px; font-weight: 750; line-height: 1.4; padding: 2px 8px; border-radius: 7px; background: var(--ok-soft); color: var(--ok); }
 .pk.top .pk-save { background: var(--brand-soft); color: var(--brand-ink); }
