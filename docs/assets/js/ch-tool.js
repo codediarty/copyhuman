@@ -7,7 +7,7 @@
   var CH = window.CH, CFG = window.CH_CFG || {}, LITE = window.CHLite, CKP = window.CHCK;
   if (!CH || !LITE) return;
   var $ = CH.$, $$ = CH.$$, esc = CH.esc, ico = CH.ico;
-  var FREE_MAX = CFG.freeMax || 6000, PAID_MAX = CFG.paidMax || 50000, CHUNK = CFG.chunk || 6000;
+  var FREE_MAX = CFG.freeMax || 6000, PAID_MAX = CFG.paidMax || 200000, CHUNK = CFG.chunk || 6000;
   var KINDKO = { thesis: '논문', report: '레포트 · 과제', resume: '자기소개서', etc: '기타' };
 
   function TI() { return window.AMTextIn; }
@@ -36,6 +36,19 @@
   function noSp(t) { return String(t || '').replace(/\s+/g, '').length; }
   function nowStr() { var d = new Date(), p = function (x) { return ('0' + x).slice(-2); }; return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
   function seq(list, fn) { var out = []; return list.reduce(function (p, x, i) { return p.then(function () { return fn(x, i); }).then(function (r) { out.push(r); }); }, Promise.resolve()).then(function () { return out; }); }
+  /* 2026.11.22 처리 속도만(대표: '엔진 성능이나 결과가 바뀌면 절대 안 됨', AIMarker 13.30 과 같게): 6,000자 조각(묶음)을 PAR 개씩 동시에 보내고
+     결과는 원래 순서대로 모음. 조각마다 보내는 값(글 · 말투 · 버전 · 코드)은 하나씩 보낼 때와 똑같음. ready() 가 거짓인 동안(말투 '자동'이 아직 안 정해짐)은
+     하나씩 보내 첫 조각이 정한 말투를 나머지에 그대로 씀. 한 조각이라도 실패하면 새 조각은 더 보내지 않고(하나씩 보낼 때처럼 남은 토큰을 쓰지 않게),
+     이미 보낸 조각이 끝나기를 기다렸다가 실패를 알림(늦게 끝난 조각의 진행 표시가 실패 안내를 덮지 않게).
+     '처음 나온 안내 문구'처럼 순서가 있는 값은 다 받은 뒤 원래 순서로 고름 */
+  var PAR = 4;
+  function par(list, fn, ready) {
+    var res = new Array(list.length), next = 0, err = null;
+    function one() { var i = next++; return fn(list[i], i).then(function (r) { res[i] = r; }, function (e) { if (!err) err = e || { message: '' }; }); }
+    function solo() { return !err && next < list.length && ready && !ready() ? one().then(solo) : Promise.resolve(); }
+    function lane() { return !err && next < list.length ? one().then(lane) : Promise.resolve(); }
+    return solo().then(function () { var ls = [], k = Math.min(PAR, list.length - next); while (k-- > 0) ls.push(lane()); return Promise.all(ls); }).then(function () { if (err) throw err; return res; });
+  }
 
   /* 글 나누기: 문단 단위로 CHUNK자 이하, 긴 문단은 문장 끝에서 */
   function chunk(text, size) {
@@ -563,8 +576,9 @@
       var C = chunk(t), need = CH.costParts('unit', C.parts);
       gate(need, '전체 결과', function () {
         busy(true); show(progHtml('전체 결과 만드는 중', 0, C.parts.length, '', 'check', t)); toOut();
-        seq(C.parts, function (part, i) {
-          return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code }, 120000).then(function (r) { show(progHtml('전체 결과 만드는 중', i + 1, C.parts.length, '', 'check', t)); return r; });
+        var doneF = 0;   // 2026.11.22 동시에 보내도 진행 표시는 끝난 조각 수
+        par(C.parts, function (part, i) {
+          return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code }, 120000).then(function (r) { show(progHtml('전체 결과 만드는 중', ++doneF, C.parts.length, '', 'check', t)); return r; });
         }).then(function (rs) {
           var N = merge(rs, true, t); N.total = t.length; N.locked = false;
           S.res = N; toneInit(t, N.autoTone); CH.pass.refresh().then(CH.paintChip);
@@ -589,8 +603,8 @@
       var C = chunk(t);
       gate(row.tok, name, function () {
         busy(true); show(progHtml(name, 0, 1, '', 'check', t)); toOut();
-        var p = S.res.full ? Promise.resolve(S.res) : seq(C.parts, function (part, i) {
-          return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code }, 120000).then(function (r) { show(progHtml('문장마다 AI 점수를 매기는 중', i + 1, C.parts.length, '', 'check', t)); return r; });
+        var doneS = 0, p = S.res.full ? Promise.resolve(S.res) : par(C.parts, function (part, i) {
+          return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code }, 120000).then(function (r) { show(progHtml('문장마다 AI 점수를 매기는 중', ++doneS, C.parts.length, '', 'check', t)); return r; });
         }).then(function (rs) { var N = merge(rs, true, t); N.total = t.length; N.locked = false; S.res = N; toneInit(t, N.autoTone); return N; });
         p.then(function (N) {
           var total = N.chars || noSp(t), cur = total * (N.rate || 0) / 100, PK = planPick(N, t, target), sel = PK.sel;   // 2.1 목표표와 같은 셈으로 고름
@@ -605,16 +619,18 @@
           groups.forEach(function (gg) { if (!cur || (cur.text.length + gg.text.length + 2) > CHUNK) { cur = { text: '', gs: [] }; parts.push(cur); } cur.text += (cur.text ? '\n\n' : '') + gg.text; cur.gs.push(gg); });
           var newT = {}, GS = {}, ac = 0, aa = 0, changed = 0, tp = toneReq(t, true), tn = { conv: 0, miss: 0, note: '' };   // 2.0 정한 말투를 모든 묶음에 똑같이
           show(progHtml('AI 점수 높은 문장부터 사람 말투로 바꾸는 중', 0, parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.', 'hum', sel.map(function (x) { return x.t; }).join(' ')));
-          return seq(parts, function (pt, k) {
+          var doneP = 0, notes = [];
+          return par(parts, function (pt, k) {
             return CH.call('am.humanize', { text: pt.text, tone: tp, variant: 0, pass: CH.pass.code }, 150000).then(function (r) {
               var outs = String(r.text || '').split(/\n{2,}/);
               if (r.aiAfter) { ac += r.aiAfter.chars || 0; aa += r.aiAfter.aiChars || 0; }
               changed += (r.stats && r.stats.changed) || (r.applied || []).length || 0;
-              if (tp === 'plain') { if (r.tone === 'plain') tn.conv++; else tn.miss++; if (r.toneNote && !tn.note) tn.note = r.toneNote; }
+              if (tp === 'plain') { if (r.tone === 'plain') tn.conv++; else tn.miss++; if (r.toneNote) notes[k] = r.toneNote; }
               if (outs.length === pt.gs.length) { pt.gs.forEach(function (gg, j) { gg.out = outs[j].trim(); }); return; }
               return seq(pt.gs, function (gg) { return CH.call('am.humanize', { text: gg.text, tone: tp, variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { gg.out = (r2.text || gg.text).trim(); if (r2.aiAfter) { ac += r2.aiAfter.chars || 0; aa += r2.aiAfter.aiChars || 0; } }); });
-            }).then(function () { show(progHtml('AI 점수 높은 문장부터 사람 말투로 바꾸는 중', k + 1, parts.length, '', 'hum', sel.map(function (x) { return x.t; }).join(' '))); });
+            }).then(function () { show(progHtml('AI 점수 높은 문장부터 사람 말투로 바꾸는 중', ++doneP, parts.length, '', 'hum', sel.map(function (x) { return x.t; }).join(' '))); });
           }).then(function () {
+            notes.forEach(function (nt) { if (nt && !tn.note) tn.note = nt; });   // 2026.11.22 순서대로 첫 안내(하나씩 보낼 때와 같게)
             groups.forEach(function (gg) { if (gg.out == null || !gg.out) return; newT[gg.idx[0]] = gg.out; gg.idx.slice(1).forEach(function (ix) { newT[ix] = ''; GS[ix] = 1; }); });
             /* 고르지 않은 문장: 대표 수정 규칙 · 쉼표 · 가운뎃점 정리만(am.punc, 토큰 없음). 실패하면 원문 그대로 */
             return puncRest(N, newT, tp);
@@ -656,15 +672,16 @@
       var parts = [], pc = null;
       segs.forEach(function (sg) { if (!pc || (pc.text.length + sg.text.length + 2) > CHUNK) { pc = { text: '', segs: [] }; parts.push(pc); } pc.text += (pc.text ? '\n\n' : '') + sg.text; pc.segs.push(sg); });
       R.parts = parts.length;
-      return seq(parts, function (pt) {
+      var notes = [];
+      return par(parts, function (pt, k) {
         return CH.call('am.punc', { text: pt.text, tone: tp === 'plain' ? 'plain' : '' }, 60000).then(function (r) {
           var outs = String((r && r.text) || '').split(/\n{2,}/);
-          if (tp === 'plain' && r) { if (r.tone !== 'plain') { R.miss++; if (r.toneNote && !R.note) R.note = r.toneNote; } }
+          if (tp === 'plain' && r) { if (r.tone !== 'plain') { R.miss++; if (r.toneNote) notes[k] = r.toneNote; } }
           if (outs.length !== pt.segs.length) return;
           if (r && r.aiAfter) { R.pn++; R.pa += r.aiAfter.aiChars || 0; R.pc += r.aiAfter.chars || 0; }
           pt.segs.forEach(function (sg, j) { var o = outs[j].trim(); if (!o) return; R.t[sg.idx[0]] = o; sg.idx.slice(1).forEach(function (k) { R.skip[k] = 1; }); });
         }).catch(function () { /* 그 묶음은 원문 그대로 */ });
-      }).then(function () { return R; });
+      }).then(function () { notes.forEach(function (nt) { if (nt && !R.note) R.note = nt; }); return R; });
     }
     function planResultHtml(res) {
       var LVK = { hi: 'AI 패턴', mid: 'AI 패턴', low: 'AI 패턴' };
@@ -695,26 +712,27 @@
     function needLine(need, name) {
       return need > 0 ? '이 글 ' + esc(name) + ': <b>' + CH.tk(need) + '토큰</b>' : '600자 이하 글의 ' + esc(name) + '는 토큰이 빠지지 않습니다. 토큰 코드만 있으면 바로 열립니다.';
     }
+    function more(intent) { return intent === 'full' ? '' : '<br><span class="need-more">넉넉하게 충전하고 반복 변환할수록 AI 작성률을 더욱 강력하게 낮출 수 있습니다.</span>'; }   // 11.22 대표 문구(다른 서비스 충전 창과 같게)
     function gate(need, name, go, intent) {
       /* need 는 지금 넣은 코드의 값으로 센 토큰. 충전 창에는 새로 사는 토큰의 값(list)으로 보여 주고, 코드를 새로 넣으면 그 코드의 값으로 다시 셈 */
       var rm0 = CH.rateMul(), list = Math.round(need / rm0 * 10) / 10, rn = Math.max(list, journey());
       function again() { gate(Math.round(list * CH.rateMul() * 10) / 10, name, go, intent); }
       if (CH.server.state === 'off') {
         saveDraft();
-        CH.buy({ need: list, recNeed: rn, needText: needLine(list, name), title: '토큰으로 ' + name + ' 이어서 하기', intent: intent });
+        CH.buy({ need: list, recNeed: rn, needText: needLine(list, name) + more(intent), title: intent === 'full' ? '토큰으로 ' + name + ' 이어서 하기' : '지금 충전하고 AI 작성률을 낮추세요', intent: intent });   // 11.22 대표 문구(다듬기로 연 충전 창 머리)
         return;
       }
       if (!CH.pass.code) {
         saveDraft();
-        CH.buy({ need: list, recNeed: rn, needText: needLine(list, name), title: name + '에 쓸 토큰 충전', intent: intent, done: again });
+        CH.buy({ need: list, recNeed: rn, needText: needLine(list, name) + more(intent), title: intent === 'full' ? name + '에 쓸 토큰 충전' : '지금 충전하고 AI 작성률을 낮추세요', intent: intent, done: again });
         return;
       }
       var l = CH.pass.left();
       if (l != null && l < need) {
         if (CH.payReady() && rm0 >= 1) {   // 지금 코드에 바로 더할 수 있을 때: 모자란 만큼만
-          CH.buy({ need: need - l, recNeed: Math.max(need - l, rn - l), needText: '남은 토큰 <b>' + CH.tk(l) + '</b> · 필요한 토큰 <b>' + CH.tk(need) + '</b> · 모자란 토큰 <b>' + CH.tk(need - l) + '</b>', title: '토큰이 조금 모자라요', intent: intent, done: again });
+          CH.buy({ need: need - l, recNeed: Math.max(need - l, rn - l), needText: '남은 토큰 <b>' + CH.tk(l) + '</b> · 필요한 토큰 <b>' + CH.tk(need) + '</b> · 모자란 토큰 <b>' + CH.tk(need - l) + '</b>' + more(intent), title: '토큰이 조금 모자라요', intent: intent, done: again });
         } else {   // 새로 충전한 토큰은 새 코드로 오므로, 새 코드가 이 일을 다 할 수 있는 토큰으로 보여 줌
-          CH.buy({ need: list, recNeed: rn, needText: '지금 코드에 남은 토큰 <b>' + CH.tk(l) + '</b> · 이 글 ' + esc(name) + '에 필요한 토큰 <b>' + CH.tk(need) + '</b><br>새로 충전한 토큰은 새 코드로 옵니다. 새 코드로는 이 글에 <b>' + CH.tk(list) + '토큰</b>이 듭니다.', title: '토큰이 모자라요', intent: intent, done: again });
+          CH.buy({ need: list, recNeed: rn, needText: '지금 코드에 남은 토큰 <b>' + CH.tk(l) + '</b> · 이 글 ' + esc(name) + '에 필요한 토큰 <b>' + CH.tk(need) + '</b><br>새로 충전한 토큰은 새 코드로 옵니다. 새 코드로는 이 글에 <b>' + CH.tk(list) + '토큰</b>이 듭니다.' + more(intent), title: '토큰이 모자라요', intent: intent, done: again });
         }
         return;
       }
@@ -742,10 +760,10 @@
       var C = chunk(t), need = CH.costParts('pro', C.parts);
       gate(need, 'AI 휴머나이징', function () {
         busy(true); show(progHtml('AI 문체를 사람 말투로 바꾸는 중', 0, C.parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.', 'hum', t)); toOut();
-        var tp = toneReq(t, false);   // 2.0 글마다 정한 말투(모르면 서버 자동)
-        seq(C.parts, function (part, i) {
-          return CH.call('am.humanize', { text: part, tone: tp, variant: 0, pass: CH.pass.code }, 150000).then(function (r) { if (tp === 'auto' && (r.tone === 'plain' || r.tone === 'keep')) tp = r.tone; show(progHtml('AI 문체를 사람 말투로 바꾸는 중', i + 1, C.parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.', 'hum', t)); return r; });
-        }).then(function (rs) {
+        var tp = toneReq(t, false), doneH = 0;   // 2.0 글마다 정한 말투(모르면 서버 자동)
+        par(C.parts, function (part, i) {
+          return CH.call('am.humanize', { text: part, tone: tp, variant: 0, pass: CH.pass.code }, 150000).then(function (r) { if (tp === 'auto' && (r.tone === 'plain' || r.tone === 'keep')) tp = r.tone; show(progHtml('AI 문체를 사람 말투로 바꾸는 중', ++doneH, C.parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.', 'hum', t)); return r; });
+        }, function () { return tp !== 'auto'; }).then(function (rs) {
           var text = rs.map(function (r, i) { return (i ? C.seps[i - 1] : '') + (r.text || ''); }).join('');
           var bc = 0, ba = 0, ac = 0, aa = 0, changed = 0;
           rs.forEach(function (r) { if (r.ai) { bc += r.ai.chars || 0; ba += r.ai.aiChars || 0; } if (r.aiAfter) { ac += r.aiAfter.chars || 0; aa += r.aiAfter.aiChars || 0; } changed += (r.stats && r.stats.changed) || (r.applied || []).length || 0; });
@@ -793,13 +811,13 @@
       var label = sel ? '표시 영역 ' + regCount(spans) + '곳 휴머나이징' : '표시 문장 휴머나이징';
       gate(need, label, function () {
         busy(true); show(progHtml('표시된 문장 다듬는 중', 0, parts.length, '결과확인서에 표시된 문장만 사람 말투로 바꿉니다. 숫자 · 이름 · 인용은 그대로 둡니다.', 'hum', spans.map(function (sp) { return sp.t; }).join(' '))); toOut();
-          var newT = spans.map(function (sp) { return sp.t; });
-        seq(parts, function (pt, i) {
+          var newT = spans.map(function (sp) { return sp.t; }), doneK = 0;
+        par(parts, function (pt, i) {
           return CH.call('am.humanize', { text: pt.text, tone: 'keep', variant: 0, pass: CH.pass.code }, 150000).then(function (r) {   // 2.0 표시된 문장만 바꾸므로 말투는 그대로(묶음마다 자동으로 정하면 일부만 '~다'로 바뀜)
             var outs = String(r.text || '').split(/\n{2,}/);
             if (outs.length === pt.idx.length) { pt.idx.forEach(function (k, j) { newT[k] = outs[j].trim(); }); return; }
             return seq(pt.idx, function (k) { return CH.call('am.humanize', { text: spans[k].t, tone: 'keep', variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { newT[k] = (r2.text || spans[k].t).trim(); }); });
-          }).then(function () { show(progHtml('표시된 문장 다듬는 중', i + 1, parts.length, '', 'hum', spans.map(function (sp) { return sp.t; }).join(' '))); });
+          }).then(function () { show(progHtml('표시된 문장 다듬는 중', ++doneK, parts.length, '', 'hum', spans.map(function (sp) { return sp.t; }).join(' '))); });
         }).then(function () {
           var text = ck.text, pairs = [];
           for (var k = spans.length - 1; k >= 0; k--) { var sp = spans[k]; text = text.slice(0, sp.s) + newT[k] + text.slice(sp.e); }

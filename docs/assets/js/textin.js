@@ -11,7 +11,7 @@
   'use strict';
   var ROOT = (document.body && document.body.getAttribute('data-root')) || '/';
   var VER = (function () { var s = document.querySelector('script[src*="textin.js"]'); var m = s && /[?&]v=([\w.-]+)/.exec(s.getAttribute('src') || ''); return m ? m[1] : ''; })();
-  var MAXB = 30 * 1024 * 1024, MAXC = 50000, MAXPDF = 300;
+  var MAXB = 30 * 1024 * 1024, MAXC = 200000, MAXPDF = 300;   // 2026.11.22 글은 20만 자까지(AIMarker 13.30 과 같게)
   var ACCEPT = '.hwp,.hwpx,.docx,.pdf,.txt,.md,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   var W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   var MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
@@ -1022,7 +1022,7 @@
     });
   }
   var SER = function (dom) { return new XMLSerializer().serializeToString(dom).replace(/^(<\?xml[^>]*\?>)?/, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'); };
-  function exportSame(src, newText, opt) {   // 원본(.docx · .hwpx · .hwp)에서 바뀐 문단만. opt.cutAt: 5만 자에서 잘라 넣은 글이면 뒤쪽은 원래 글 그대로
+  function exportSame(src, newText, opt) {   // 원본(.docx · .hwpx · .hwp)에서 바뀐 문단만. opt.cutAt: 20만 자에서 잘라 넣은 글이면 뒤쪽은 원래 글 그대로
     var doc = src && src.doc; if (!doc) return Promise.resolve(null);
     newText = canon(newText);
     if (opt && opt.cutAt > 0 && opt.cutAt < src.text.length) newText = newText + src.text.slice(opt.cutAt);

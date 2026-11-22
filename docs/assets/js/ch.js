@@ -180,11 +180,13 @@
   }
   var REFUND = '토큰 유효기간은 충전일부터 5년입니다. 코드 발송 전에는 전액 취소되고, 발송 뒤에는 쓴 토큰과 받은 결과는 환불되지 않습니다(쓰지 않은 토큰은 이용약관 기준).';
   /* opt: { need, recNeed, needText, title, focusCode, pick, intent, done(pass) } */
+  var PK_OLD = { h2: 'h5', h3: 'h6', h4: 'h7' };   // 2026.11.22 예전 칸 번호(서버에서 legacy)로 연 충전 창은 같은 이름의 새 칸으로
   CH.buy = function (opt) {
     opt = opt || {};
+    if (opt.pick && PK_OLD[opt.pick]) opt.pick = PK_OLD[opt.pick];
     close();
     lastFocus = document.activeElement; onDone = opt.done || null;
-    var direct = CH.payReady(), list = packs(), t0 = Date.now(), need = Math.max(0, +opt.need || 0);
+    var direct = CH.payReady(), list = packs(), t0 = Date.now(), need = Math.max(0, +opt.need || 0), humI = /^(plan|hum|ckhum)$/.test(opt.intent || '');   // 11.22 다듬기(휴머나이징)로 연 충전 창
     var rec = (opt.pick && list.filter(function (x) { return x.id === opt.pick; })[0]) || recPack(opt.recNeed || opt.need || 0, list);
     var mail0 = CH.sget('ch_mail'), tail = P.code ? P.norm(P.code).slice(-4) : '';
     box = document.createElement('div');
@@ -208,7 +210,7 @@
       '<p class="fine">결제는 카피휴먼 운영사 <b>성균관컨설팅</b>의 결제 페이지에서 합니다. 결제가 확인되면 주문서의 이메일로 <b>16자리 토큰 코드</b>가 갑니다. 메일이 안 보이면 스팸함도 확인해 주세요. 영수증과 카드 명세서에는 성균관컨설팅으로 표시됩니다.</p>';
     box.innerHTML = '<div class="modal-in"><button class="modal-x" type="button" aria-label="닫기">×</button>' +
       '<div class="stack"><span class="eyebrow">토큰 충전</span><h2 id="buyT">' + CH.esc(opt.title || '월 구독 없이, 한 번만 충전하세요') + '</h2>' +
-      '<p class="muted small">충전한 토큰은 쓴 만큼만 빠지고, 남은 토큰은 5년 동안 이어서 씁니다. 많이 충전할수록 토큰당 가격이 낮아집니다.</p></div>' +
+      '<p class="muted small">반복할수록 AI 작성률은 더 낮아집니다. 남은 토큰은 5년 동안 소멸되지 않습니다.</p></div>' +   // 11.22 대표 문구(다른 서비스 충전 창과 같게)
       (opt.needText ? '<div class="need">' + opt.needText + '</div>' : '') +
       '<fieldset class="packs" style="border:0;padding:0;margin:0"><legend class="sr">충전할 토큰</legend>' + list.map(function (p) {
         var times = need > 0 ? Math.floor(p.tok / need) : 0;
@@ -218,7 +220,7 @@
           '<span class="pk-price">' + CH.n(p.price) + '원' + (p.per ? '<small>토큰당 ' + CH.esc(p.per) + '원</small>' : '') + '</span>' +
           (p.save ? '<span class="pk-save">' + CH.esc(p.refName || '') + ' 대비 토큰당 약 ' + p.save + '% 절약</span>' : '') +
           '<span class="pk-who">' + CH.esc(p.who) + '</span>' +
-          (times >= 1 && !opt.pick ? '<span class="pk-fit">' + (p.id === rec.id ? CH.ico('check') + '이 글에 맞음 · ' : '') + '이 작업 약 ' + CH.n(times) + '번</span>' : '') + '</label>';
+          (need > 0 && !opt.pick && (times >= 1 || humI) ? '<span class="pk-fit' + (times < 1 ? ' no' : '') + '">' + (times >= 1 && p.id === rec.id ? CH.ico('check') + (humI ? '' : '이 글에 맞음 · ') : '') + (humI ? (times < 1 ? '이 글의 AI 작성률을 낮추기엔 부족해요' : times === 1 ? '내 문서 AI 작성률 낮추기 (1회)' : '내 문서 AI 작성률 극한으로 낮추기 (' + (times >= 1000 ? '1,000회 넘게' : CH.n(times) + '회') + ' 반복)') : '이 작업 약 ' + CH.n(times) + '번') + '</span>' : '') + '</label>';   // 11.22 대표 문구(다듬기: 모자람 · 1회 · N회 반복, 전체 결과는 그대로)
       }).join('') + '</fieldset>' + payPart +
       '<div class="code-box"><label for="codeIn"><b>받은 토큰 코드 넣기</b></label><div class="code-row"><input id="codeIn" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX" value="' + CH.esc(P.code) + '"><button class="btn btn-d" type="button" data-code>코드 넣기</button></div>' +
       '<p class="code-msg" data-code-msg role="status">' + (P.code ? '이 브라우저에 저장된 코드가 있습니다. 남은 토큰을 확인하려면 코드 넣기를 누르세요.' : '코드는 이 브라우저에만 저장됩니다. 다른 기기에서는 코드를 다시 넣어 주세요.') + '</p></div>' + offNote +
