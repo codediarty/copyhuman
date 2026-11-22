@@ -588,6 +588,23 @@ h1 em, h2 em { white-space: nowrap; }
 .plan-t td:last-child { text-align: right; }
 .plan-t .btn-s { min-height: 34px; padding: 0 12px; font-size: 13.5px; }
 .rep-sec .tbl-wrap { border-radius: 14px; }
+/* 2026.11.22 결과확인서 목표 표: 글자를 키우고, 마지막 줄 버튼은 결제로 이어지는 큰 버튼('걸린 부분 AI 작성률 낮추기') */
+.plan-sec { gap: 14px; }
+.plan-sec h4 { font-size: 19px; letter-spacing: -.03em; flex-wrap: wrap; row-gap: 6px; }
+.plan-sec h4 .cnt { font-size: 13px; padding: 3px 10px; white-space: nowrap; }
+.plan-sec .plan-t { font-size: 15.5px; min-width: 900px; }
+.plan-sec .plan-t th { font-size: 13.5px; padding: 12px 16px; }
+.plan-sec .plan-t td { padding: 18px 16px; }
+.plan-sec .plan-t td.tg b { font-size: 18px; }
+.plan-sec .plan-t td.est b { font-size: 24px; }
+.plan-sec .plan-t td.est small { font-size: 13px; }
+.plan-sec .plan-t td.n b { font-size: 17px; }
+.plan-sec .plan-t .btn-s { min-height: 42px; padding: 0 16px; font-size: 15px; }
+.plan-sec .plan-t tr.all .btn { min-height: 52px; padding: 0 20px 0 22px; font-size: 16.5px; font-weight: 750; border-radius: 13px; }
+.plan-sec .plan-t tr.all .btn .ico { width: 19px; height: 19px; transition: transform .2s var(--ease); }
+.plan-sec .plan-t tr.all .btn:hover .ico { transform: translateX(2px); }
+.plan-sec .fine { font-size: 13.5px; }
+.pay-opt .btn .ico { width: 18px; height: 18px; }
 @media (max-width: 700px) {
   .plan-wrap { overflow: visible; border: 0; background: transparent; }
   .plan-t { min-width: 0; display: block; }
@@ -602,6 +619,27 @@ h1 em, h2 em { white-space: nowrap; }
   .plan-t td.tg b { font-size: 17px; }
   .plan-t td.act { grid-column: 1 / -1; text-align: left; margin-top: 6px; }
   .plan-t td.act .btn { width: 100%; }
+}
+/* 표가 칸에 다 들어가지 않는 폭에서는 카드로 바꿔 버튼이 가려지지 않게 */
+@media (max-width: 1060px) {
+  .plan-sec .plan-wrap { overflow: visible; border: 0; background: transparent; }
+  .plan-sec .plan-t { min-width: 0; display: block; }
+  .plan-sec .plan-t thead { display: none; }
+  .plan-sec .plan-t tbody { display: grid; gap: 12px; }
+  .plan-sec .plan-t tr { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px 16px; padding: 16px 18px 18px; border: 1px solid var(--line2); border-radius: 16px; background: var(--card); }
+  .plan-sec .plan-t tr.all { background: var(--tint); border-color: color-mix(in srgb, var(--brand) 38%, transparent); }
+  .plan-sec .plan-t td { display: block; padding: 0; border: 0; white-space: normal; font-size: 15.5px; }
+  .plan-sec .plan-t td::before { content: attr(data-th); display: block; font-size: 12.5px; color: var(--mut); margin-bottom: 2px; }
+  .plan-sec .plan-t td.tg { grid-column: 1 / -1; }
+  .plan-sec .plan-t td.tg::before { display: none; }
+  .plan-sec .plan-t td.tg b { font-size: 19px; }
+  .plan-sec .plan-t td.est b { font-size: 22px; }
+  .plan-sec .plan-t td.act { grid-column: 1 / -1; text-align: left; margin-top: 6px; }
+  .plan-sec .plan-t td.act .btn { width: 100%; }
+}
+@media (max-width: 700px) {
+  .plan-sec h4 { font-size: 18px; }
+  .plan-sec .plan-t tr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* 문서 보기: 표시는 형광펜처럼 */
