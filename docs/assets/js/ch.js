@@ -215,7 +215,7 @@
         return '<label class="pk' + (p.best ? ' best' : '') + (p.top ? ' top' : '') + '"><input type="radio" name="pk" value="' + p.id + '"' + (p.id === rec.id ? ' checked' : '') + '>' +
           '<span class="pk-top"><b>' + CH.esc(p.name) + '</b>' + (p.badge ? '<span class="badge' + (p.best ? '' : ' soft') + '">' + CH.esc(p.badge) + '</span>' : '') + '</span>' +
           '<span class="pk-tok">' + CH.n(p.tok) + '토큰' + (p.tok > p.base ? '<small>+' + CH.n(p.tok - p.base) + ' 더</small>' : '') + '</span>' +
-          '<span class="pk-price">' + CH.n(p.price) + '원' + (p.refPrice ? '<s title="같은 토큰을 플러스 단가로 샀을 때의 금액"><span class="sr">플러스 단가 기준 </span>' + CH.n(p.refPrice) + '원</s>' : '') + (p.per ? '<small>토큰당 ' + CH.esc(p.per) + '원</small>' : '') + '</span>' +
+          '<span class="pk-price">' + CH.n(p.price) + '원' + (p.refPrice ? '<s title="정가"><span class="sr">정가 </span>' + CH.n(p.refPrice) + '원</s>' : '') + (p.per ? '<small>토큰당 ' + CH.esc(p.per) + '원</small>' : '') + '</span>' +
           (p.save ? '<span class="pk-save">' + CH.esc(p.refName || '') + ' 대비 토큰당 약 ' + p.save + '% 절약</span>' : '') +
           '<span class="pk-who">' + CH.esc(p.who) + '</span>' +
           (need > 0 && !opt.pick && (humI ? (times < 1 || p.save) : times >= 1) ? '<span class="pk-fit' + (times < 1 ? ' no' : '') + '">' + (times >= 1 && p.id === rec.id ? CH.ico('check') + (humI ? '' : '이 글에 맞음 · ') : '') + (humI ? (times < 1 ? '이 글의 AI 작성률을 낮추기엔 부족해요' : '내 문서 AI 작성률 극한으로 낮추기') : '이 작업 약 ' + CH.n(times) + '번') + '</span>' : '') + '</label>';   // 11.22 대표 문구(다듬기: 모자람 · 프로 · 맥스만 '내 문서 AI 작성률 극한으로 낮추기'. 21:41 몇 회 반복은 빼고 라이트 · 플러스는 이 줄 없음, 전체 결과는 그대로)
