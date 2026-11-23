@@ -182,11 +182,11 @@
     var cutNote = N.cut ? '<div class="lockline">' + ico('lock') + '<span>앞 ' + CH.n(N.checked || FREE_MAX) + '자만 검사했습니다(전체 ' + CH.n(N.total) + '자). 나머지 부분까지 검사하려면 전체 결과를 여세요.</span></div>' : '';
     var lockNote = N.locked && N.aiN > (N.shown || 0) ? '<div class="lockline">' + ico('lock') + '<span>AI 패턴 문장 <b>' + N.aiN + '개</b> 가운데 가장 뚜렷한 <b>' + (N.shown || 0) + '개</b>만 표시했습니다. 나머지 ' + (N.aiN - (N.shown || 0)) + '개는 전체 결과에서 보입니다.</span></div>' : '';
     var liteNote = N.engine === 'lite' ? '<p class="fine">엔진 서버와 연결되지 않아 이 브라우저 안의 간이 엔진으로 검사했습니다. 수치는 간이 엔진 기준이며 서버 엔진 결과와 다를 수 있습니다.</p>' : '';
-    return '<article class="rep" aria-label="AI 생성 검사 결과">' +
-      '<header class="rep-h"><div><small>카피휴먼 AI 생성 검사</small><h3>상세 결과확인서</h3></div>' +
+    return '<article class="rep" aria-label="AI 작성률 검사 결과">' +
+      '<header class="rep-h"><div><small>카피휴먼 AI 작성률 검사</small><h3>상세 결과확인서</h3></div>' +
       '<dl class="rep-meta"><dt>검사번호</dt><dd>' + esc(N.cn || '-') + '</dd><dt>검사일시</dt><dd>' + nowStr() + '</dd><dt>문서</dt><dd>' + esc(ctx.docName || KINDKO[ctx.kind] || '붙여 넣은 글') + '</dd><dt>글자 수</dt><dd>' + CH.n(N.total || N.chars) + '자</dd></dl></header>' +
       '<div class="rep-v is-' + k + '"><div class="verdict"><span class="pill is-' + k + '">' + ico(BICO[k]) + esc(b.ko) + '</span><h4>' + esc(b.label) + '</h4><ul class="why">' + (b.why || []).map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul></div>' +
-      '<div><div class="gauge-n"><b data-n="' + N.rate + '" data-suf="%">' + N.rate + '%</b><span>AI 작성률</span></div>' + gauge(N.rate) + '</div></div>' +
+      '<div><div class="gauge-n"><b data-n="' + N.rate + '" data-suf="%">' + N.rate + '%</b><span>AI 작성률</span></div>' + gauge(N.rate) + '</div></div>' + humGo(N, ctx) +
       '<div class="rep-sec stats-sec"><h4>분석 정보</h4><dl class="rep-stats is-' + k + '">' + stat('AI 작성률', N.rate + '%', 'rate') + stat('전체 문장', CH.n(N.n)) + stat('AI 패턴 문장', CH.n(N.aiN), N.aiN ? 'warn' : '') + stat('AI 점수 85 이상', CH.n(N.lv.hi)) + stat('AI 패턴 구간', N.segN ? N.segAi + ' / ' + N.segN : '-') + '</dl></div>' +
       '<div class="rep-sec"><h4>종합 의견</h4><ol class="opinion">' + N.opinion.map(function (o) { return '<li>' + esc(o) + '</li>'; }).join('') + '</ol></div>' +
       '<div class="rep-sec"><h4>AI 패턴 문장 <span class="cnt">' + (N.locked ? '일부 표시' : '전체 표시') + '</span></h4>' + cutNote + lockNote +
@@ -195,6 +195,15 @@
       '<div class="rep-sec"><h4>AI 문체 특성 <span class="cnt">' + N.feat.length + '종</span></h4>' + featHtml(N.feat) + '</div>' +
       '<div class="rep-sec"><p class="fine">검사 엔진: ' + engineLine(N) + '. AI 작성률은 문장마다 AI 점수를 그 문장의 글자 수만큼 반영한 추정값(판별 모델이 틀릴 수 있는 만큼을 남겨 7~92%)이며 증명이 아닙니다. 다른 검사기의 결과와 다를 수 있고, 같은 글은 언제나 같은 결과가 나옵니다.</p>' + liteNote + '</div>' +
       '</article>';
+  }
+  /* 13.34(2026.11.23 21:36 대표 '검사했을때 나오는 화면에서 바로 휴머나이징 시작하기(AI 작성률 낮추기) 버튼 … 소모 토큰도 같이 … 누르면 바로 실행'):
+     결과확인서 판정 바로 아래에 단추 하나. 누르면 아래 '글 전체 휴머나이징'과 같은 일(토큰이 있으면 묻지 않고 바로, 없으면 충전 창) */
+  function humGo(N, ctx) {
+    var t = ctx && ctx.text; if (!t) return '';
+    var need = CH.costParts('pro', chunk(t).parts), n = (N && N.aiN) || 0, risky = N && N.band && (N.band.key === 'unfit' || N.band.key === 'risk');
+    return '<div class="rep-cta"><div class="rc-t"><b>' + (risky ? 'AI 작성률 ' + N.rate + '%, 지금 바로 낮출 수 있습니다' : '더 낮추고 싶다면 바로 다듬을 수 있습니다') + '</b>' +
+      '<span>' + (n ? 'AI 패턴 문장 ' + CH.n(n) + '개를 포함해 ' : '') + '글 전체를 사람 말투로 다듬고, 같은 기준으로 다시 재서 전후 AI 작성률을 보여 드립니다. 뜻 · 숫자 · 인용은 그대로.</span></div>' +
+      '<button class="btn btn-p rc-go" type="button" data-act="hum"><span>휴머나이징 시작하기(AI 작성률 낮추기) · ' + CH.tk(need) + '토큰</span>' + ico('arrow') + '</button></div>';
   }
   /* 목표별 다듬기 계획(붙여 넣은 글): 검출 글자 가운데 얼마나 고쳐야 목표 아래로 내려가는지
      need = 전체 글자 × (지금 AI 작성률 − 목표) × 여유(1.25, 보수적으로), 검출 글자를 넘지 않음. 예상 수치는 고친 문장이 다시 잡히지 않을 때의 산술값 */
@@ -243,7 +252,7 @@
   function planTable(rows, opt) {
     opt = opt || {};
     if (!rows.length) return '';
-    return '<div class="tbl-wrap plan-wrap"><table class="plan-t"><thead><tr><th scope="col">목표</th><th scope="col">다듬을 분량</th><th scope="col">예상 AI 작성률</th><th scope="col">토큰</th><th scope="col">카피휴먼</th><th scope="col">직접 고치면</th><th scope="col"></th></tr></thead><tbody>' +
+    return '<div class="tbl-wrap plan-wrap"><table class="plan-t"><thead><tr><th scope="col">' + (opt.head || '목표') + '</th><th scope="col">다듬을 분량</th><th scope="col">예상 AI 작성률</th><th scope="col">토큰</th><th scope="col">카피휴먼</th><th scope="col">직접 고치면</th><th scope="col"></th></tr></thead><tbody>' +
       rows.map(function (r, i) {
         var act = opt.act || 'plan', val = opt.val ? opt.val(r) : String(r.target), last = i === rows.length - 1;
         return '<tr' + (last ? ' class="all"' : '') + '><td class="tg" data-th="목표"><b>' + (r.target ? r.target + '% 미만' : (opt.allLabel || 'AI 패턴 문장 모두')) + '</b></td><td data-th="다듬을 분량">' + (opt.amount ? opt.amount(r) : '문장 ' + r.n + '개 · ' + CH.n(r.need) + '자') + '</td><td class="est" data-th="예상 AI 작성률"><b class="' + (r.est >= 40 ? 'c-hi' : r.est >= 20 ? 'c-mid' : 'c-ok') + '">' + r.est + '%</b><small>' + (r.est >= 40 ? '부적합' : r.est >= 20 ? '고위험' : '안전') + '</small></td><td class="n" data-th="토큰"><b>' + CH.tk(r.tok) + '토큰</b>' + (r.unit ? '<small class="muted"> · 전체 결과 포함</small>' : '') + '</td><td data-th="카피휴먼">약 ' + r.min + '분</td><td data-th="직접 고치면">' + r.hour + '</td>' +
@@ -298,7 +307,7 @@
       '<button class="btn btn-g btn-block" type="button" data-act="full">' + (hasPass ? '전체 결과 열기' : '토큰 충전하고 전체 결과 보기') + '</button></div>' +
       '<div class="pay-opt"><h4>어떻게 바뀌는지 먼저 보기</h4><p class="cost"><b>무료</b> · 첫 문단만</p>' +
       '<ul><li>첫 문단을 사람 말투로 바꾼 모습</li><li>무엇을 왜 바꿨는지는 유료 결과에서</li></ul>' +
-      '<button class="btn btn-g btn-block" type="button" data-act="taste">첫 문단 무료로 보기</button></div></div>' + planFold(rows) +
+      '<button class="btn btn-g btn-block" type="button" data-act="taste">첫 문단 무료로 보기</button></div></div>' +   // 13.34 대표 '20% 미만 10% 미만 이렇게 나누지말고': 목표별 표(planFold)는 보이지 않음
       '<div class="pay-foot"><span>토큰 코드가 있으신가요? <button class="btn btn-t btn-s" type="button" data-act="code">코드 넣기</button></span><span>논문 전체를 맡기려면 <a href="' + CH.url('expert') + '">전문가 휴머나이징</a></span></div></section>';
   }
   /* 결과확인서의 표시 영역: 영역(rg)별 글자 수, 큰 곳부터 */
@@ -318,7 +327,7 @@
     var S = ck.summary || {}, rate = S.rate, regs = ckRegions(ck), total = regs.reduce(function (a, r) { return a + r.chars; }, 0);
     if (rate == null || !regs.length || !total) return [];
     var rows = [], used = {};
-    [30, 20, 10].forEach(function (target) {
+    [].forEach(function (target) {   // 13.34(2026.11.23 21:36 대표 '20% 미만 10% 미만 이렇게 나누지말고 걸린 부분 AI 작성률 낮추기 이거 하나만'): 예전 [30, 20, 10]
       if (rate < target) return;
       var fixed = 0, pick = [];
       for (var i = 0; i < regs.length; i++) {
@@ -352,8 +361,8 @@
     var chars = ck.spans.reduce(function (a, s) { return a + s.t.length; }, 0), nreg = regCount(ck.spans);
     var cost = ckCost(ck), band = bandOfRate(S.rate, nreg), k = band.key, hasPass = !!CH.pass.code;
     var plan = ckPlan(ck);
-    var planHtml = plan.length ? '<div class="rep-sec plan-sec"><h4>목표를 고르면 바로 다듬습니다 <span class="cnt">큰 영역부터</span></h4>' +
-      planTable(plan, { act: 'ckplan', val: function (r) { return r.sel.join(','); }, amount: function (r) { return r.n + '곳 · ' + CH.n(r.chars) + '자'; }, allLabel: '표시 영역 모두', allBtn: '걸린 부분 AI 작성률 낮추기' }) +
+    var planHtml = plan.length ? '<div class="rep-sec plan-sec"><h4>걸린 부분만 바로 다듬습니다 <span class="cnt">표시 영역 모두</span></h4>' +
+      planTable(plan, { head: '범위', act: 'ckplan', val: function (r) { return r.sel.join(','); }, amount: function (r) { return r.n + '곳 · ' + CH.n(r.chars) + '자'; }, allLabel: '표시 영역 모두', allBtn: '걸린 부분 AI 작성률 낮추기' }) +
       '<p class="fine">예상 수치는 다듬은 영역이 다시 잡히지 않을 때의 산술값이며 카피킬러 재검사를 보장하지 않습니다. 직접 고치는 시간은 1,000자당 ' + hourStr(+CFG.manualHour || 1.5) + '으로 잡은 추정입니다.</p></div>' : '';
     var allCard = plan.length ? '' : '<div class="pay-opt rec"><h4>표시 영역 모두 휴머나이징</h4><p class="cost"><b>' + CH.tk(cost) + '토큰</b></p>' +
       '<ul><li>표시된 ' + nreg + '곳 ' + CH.n(chars) + '자를 사람 말투로</li><li>숫자 · 이름 · 인용은 그대로</li></ul>' +
@@ -560,9 +569,9 @@
       }
       if (noSp(t) < 60) { say('60자 이상 넣어 주세요. 문장이 몇 개는 있어야 판정할 수 있습니다.'); ta.focus(); return; }
       if (t.length > PAID_MAX) t = t.slice(0, PAID_MAX);
-      say(''); saveDraft(); S.lastT = t; busy(true); setStep(2);
+      say(''); saveDraft(); S.lastT = t; S.prevAfter = null; S.humRound = 0; busy(true); setStep(2);
       show(progHtml('AI 작성률 검사 중', 0, 1, '', 'check', t)); if (!opt.stay) toOut();
-      var ctx = { kind: kind(), docName: S.docName };
+      var ctx = { kind: kind(), docName: S.docName, text: t };
       freeCheck(t).then(function (N) {
         S.res = N; toneInit(t, N.autoTone);
         show((S.ck && opt.keepCk ? ckHtml(S.ck) : '') + reportHtml(N, ctx) + payHtml(N, t)); bindOut();
@@ -606,14 +615,14 @@
         }).then(function (rs) {
           var N = merge(rs, true, t); N.total = t.length; N.locked = false;
           S.res = N; toneInit(t, N.autoTone); CH.pass.refresh().then(CH.paintChip);
-          show(reportHtml(N, { kind: kind(), docName: S.docName }) + afterFullHtml(N, t)); bindOut();
+          show(reportHtml(N, { kind: kind(), docName: S.docName, text: t }) + afterFullHtml(N, t)); bindOut();
         }).catch(fail).then(function () { busy(false); });
       }, 'full');
     }
     function afterFullHtml(N, t) {
       var rows = planRows(N, t);
       return '<section class="pay"><div class="pay-h"><span class="eyebrow">AI 휴머나이징</span><h3>' + (N.aiN ? 'AI 패턴 문장 ' + N.aiN + '개 · 이대로 내면 AI 글로 걸러질 수 있습니다' : 'AI 패턴 문장이 없습니다') + '</h3><p>글 전체를 사람 말투로 다듬고 같은 기준으로 다시 검사합니다. 전체 결과는 열려 있어 다듬는 비용만 빠집니다.</p></div>' + toneHtml(t) +
-        '<div class="pay-opts">' + humCard(t, N) + '</div>' + planFold(rows) +
+        '<div class="pay-opts">' + humCard(t, N) + '</div>' +   // 13.34 목표별 표 빼기
         '<div class="acts"><button class="btn btn-g" type="button" data-act="taste">첫 문단 무료로 먼저 보기</button></div></section>';
     }
     /* 목표별 다듬기: (전체 결과가 없으면 먼저 열고) AI 점수 높은 문장부터 필요한 만큼 골라 사람 말투로 바꾼 뒤, 바꾼 문장을 같은 기준으로 다시 검사 */
@@ -793,17 +802,34 @@
           var bc = 0, ba = 0, ac = 0, aa = 0, changed = 0;
           rs.forEach(function (r) { if (r.ai) { bc += r.ai.chars || 0; ba += r.ai.aiChars || 0; } if (r.aiAfter) { ac += r.aiAfter.chars || 0; aa += r.aiAfter.aiChars || 0; } changed += (r.stats && r.stats.changed) || (r.applied || []).length || 0; });
           var conv = rs.some(function (r) { return r.tone === 'plain'; });
-          var res = { src: t, text: text, changed: changed, before: bc ? Math.round(ba * 100 / bc) : (S.res ? S.res.rate : null), after: ac ? Math.round(aa * 100 / ac) : null, tone: (rs[0] && rs[0].toneNote) || (conv ? '보고서 · 논설문 글이라 \'~습니다\'를 \'~다\' 말투로 바꿔 다듬었습니다.' : '') };
+          var res = { src: t, text: text, changed: changed, before: bc ? Math.round(ba * 100 / bc) : (S.prevAfter != null ? S.prevAfter : S.res ? S.res.rate : null), after: ac ? Math.round(aa * 100 / ac) : null, tone: (rs[0] && rs[0].toneNote) || (conv ? '보고서 · 논설문 글이라 \'~습니다\'를 \'~다\' 말투로 바꿔 다듬었습니다.' : '') };
+          if (S.prevAfter != null) { res.first = S.humFirst; res.round = (S.humRound || 1) + 1; S.humRound = res.round; } else { S.humFirst = res.before; S.humRound = 1; }   // 13.34 더 줄이기: 처음 글의 AI 작성률과 몇 번째인지
+          S.prevAfter = null;
           S.hum = res; setStep(3); CH.pass.refresh().then(CH.paintChip);
           show(humHtml(res)); bindOut();
           if (window.gtag) try { window.gtag('event', 'humanize', { chars: t.length }); } catch (e) { /* 무시 */ }
         }).catch(fail).then(function () { busy(false); });
       }, 'hum');
     }
+    /* 13.34(2026.11.23 21:36 대표 '휴머나이징 이후는 내가 올린 파일과 똑같은 확장자로 다운로드 … 아까 AIMARKER에서 했던것처럼 … 다시 한번 돌리게끔 그렇게 버튼 두개가 딱 있어야지 저 오른쪽 공간이 남잖아')
+       다듬은 뒤 수치 옆 오른쪽: 'AI 작성률 낮춘 파일 다운로드'(아래 받기 단추와 같은 파일: .hwp · .hwpx · .docx 는 원본 형식 그대로, .pdf · .txt · .md 도 같은 형식, 붙여 넣은 글은 워드)
+       · '더 줄이기 · N토큰'(다듬은 글로 바로 한 번 더 휴머나이징, 받는 파일 형식은 처음 올린 파일 그대로) */
+    function humAct(res) {
+      var more = CH.costParts('pro', chunk(res.text).parts), lb = dlLabel();
+      return '<div class="hz-act"><button class="btn btn-p hz-dl" type="button" data-act="docx" title="' + esc(lb) + '" aria-label="AI 작성률 낮춘 파일 다운로드(' + esc(lb) + ')">' + ico('down') + '<span>AI 작성률 낮춘 파일 다운로드</span></button>' +
+        '<button class="btn btn-g hz-more" type="button" data-act="more" title="다듬은 글로 한 번 더 휴머나이징합니다">' + ico('refresh') + '<span>더 줄이기 · ' + CH.tk(more) + '토큰</span></button></div>';
+    }
+    function moreHum() {
+      if (!S.hum || S.busy) return;
+      var prev = S.hum;
+      ta.value = prev.text; count(); S.lastT = prev.text; S.prevAfter = prev.after != null ? prev.after : prev.before;
+      saveDraft(); S.skipAsk = true; humanize();
+    }
     function humHtml(res) {
       var down = res.before != null && res.after != null;
       return '<article class="rep"><header class="rep-h"><div><small>카피휴먼 AI 휴머나이징</small><h3>다듬은 글</h3></div><dl class="rep-meta"><dt>처리일시</dt><dd>' + nowStr() + '</dd><dt>글자 수</dt><dd>' + CH.n(res.text.length) + '자</dd></dl></header>' +
-        '<div class="rep-sec"><div class="hz-stats">' + (down ? '<div class="hz-stat"><span>다듬기 전 AI 작성률</span><b>' + res.before + '%</b></div><div class="hz-stat"><span>다듬은 뒤 AI 작성률</span><b class="down">' + res.after + '%</b></div>' : '') + '<div class="hz-stat"><span>바꾼 곳</span><b>' + CH.n(res.changed) + '</b></div></div>' +
+        '<div class="rep-sec"><div class="hz-top"><div class="hz-stats">' + (down ? '<div class="hz-stat"><span>다듬기 전 AI 작성률</span><b>' + res.before + '%</b></div><div class="hz-stat"><span>다듬은 뒤 AI 작성률</span><b class="down">' + res.after + '%</b></div>' : '') + '<div class="hz-stat"><span>바꾼 곳</span><b>' + CH.n(res.changed) + '</b></div></div>' + humAct(res) + '</div>' +
+        (res.first != null && res.after != null ? '<p class="fine">더 줄이기 ' + (res.round - 1) + '번째 · 처음 글 AI 작성률 ' + res.first + '% → 지금 ' + res.after + '%</p>' : '') +
         (res.tone ? '<p class="fine">' + esc(res.tone) + '</p>' : '') +
         '<div class="legend"><span class="l-new"><i></i>바뀐 문장</span></div><div class="doc" tabindex="0">' + diffHtml(res.src, res.text) + '</div>' +
         '<div class="acts"><button class="btn btn-p" type="button" data-act="copy">다듬은 글 복사</button><button class="btn btn-g" type="button" data-act="docx">' + ico('down') + dlLabel() + '</button><button class="btn btn-g" type="button" data-act="again">다듬은 글로 다시 검사</button></div>' +
@@ -892,6 +918,7 @@
           else if (a === 'copy') { if (S.hum) CH.copy(S.hum.text); }
           else if (a === 'copypairs') { if (S.hum && S.hum.pairs) CH.copy(S.hum.pairs.map(function (p, i) { return '[' + (i + 1) + '] 원문\n' + p.a + '\n[' + (i + 1) + '] 다듬은 문장\n' + p.b; }).join('\n\n')); }
           else if (a === 'docx') download();
+          else if (a === 'more') moreHum();   // 13.34 더 줄이기
           else if (a === 'again') { if (S.hum) { ta.value = S.hum.text; count(); S.ck = null; setChip(''); run(); } }
         });
       });
