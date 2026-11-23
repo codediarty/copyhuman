@@ -447,13 +447,37 @@
     function setStep(n) { steps.forEach(function (li, i) { li.classList.toggle('on', i === n - 1); li.classList.toggle('done', i < n - 1); }); }
     function say(t, info) { if (!msg) return; msg.hidden = !t; msg.className = 'tool-msg' + (info ? ' info' : ''); msg.textContent = t || ''; }
     function count() { var n = ta.value.length; if (cnt) cnt.innerHTML = '<b>' + CH.n(n) + '</b> / ' + CH.n(PAID_MAX) + '자'; }
-    function busy(on) { S.busy = on; runB.disabled = on; $$('[data-act]', out).forEach(function (b) { b.disabled = on; }); }
+    function busy(on) { if (on && !S.busy) histStart(); S.busy = on; runB.disabled = on; $$('[data-act]', out).forEach(function (b) { b.disabled = on; }); }
     function show(html) {
       var prog = /class="scan"/.test(html.slice(0, 80));
       if (prog && !out.querySelector('.scan')) progHtml.t0 = Date.now();
       outSec.hidden = false; out.innerHTML = html;
-      if (prog) progTick(out); else { clearInterval(progTimer); revealOut(out); }
+      if (prog) progTick(out); else { clearInterval(progTimer); revealOut(out); histDone(); }
     }
+    /* 13.32(2026.11.23 대표 '뒤로가기 누르면 메인화면이나 전화면으로'): 검사 · 다듬기를 시작할 때마다 방문 기록을 하나 남겨,
+       뒤로가기를 누르면 사이트를 나가지 않고 이전 화면으로. 기록마다 그때 화면(결과 칸 · 단계)을 기억해 되살림. 처리하는 중에는 그 화면에 머묾 */
+    var HV = { on: !!(window.history && history.pushState) && !window.__chHV, cur: 0, n: 0, snaps: {}, hash: location.hash };
+    if (HV.on) window.__chHV = 1;
+    function stepNo() { for (var i = 0; i < steps.length; i++) if (steps[i].classList.contains('on')) return i + 1; return 1; }
+    function snap() { return { html: out.innerHTML, hidden: outSec.hidden, step: stepNo() }; }
+    function histStart() {
+      if (!HV.on) return;
+      HV.snaps[HV.cur] = snap();
+      var id = ++HV.n; try { history.pushState({ ch: id }, '', location.href); HV.cur = id; HV.hash = location.hash; } catch (e) { /* 그대로 */ }
+    }
+    function histDone() { if (HV.on && HV.cur) HV.snaps[HV.cur] = snap(); }
+    if (HV.on) window.addEventListener('popstate', function (e) {
+      if (!e.state && location.hash !== HV.hash) { HV.hash = location.hash; return; }   // 쪽 안 링크(#check 등)로 옮겨 간 것
+      HV.hash = location.hash;
+      var id = (e.state && e.state.ch) || 0;
+      if (S.busy) { try { history.pushState(HV.cur ? { ch: HV.cur } : null, '', location.href); } catch (x) { /* 그대로 */ } say('처리하는 중이라 이 화면에 그대로 있습니다. 끝나면 결과가 보입니다.', true); return; }
+      HV.snaps[HV.cur] = snap(); HV.cur = id;
+      var sn = HV.snaps[id];
+      clearInterval(progTimer);
+      if (sn && sn.html) { outSec.hidden = sn.hidden; out.innerHTML = sn.html; setStep(sn.step); bindOut(); }
+      else { out.innerHTML = ''; outSec.hidden = true; setStep(1); }
+      try { var r = box.getBoundingClientRect(); if (r.top < 0 || r.top > window.innerHeight * .35) window.scrollTo({ top: Math.max(0, r.top + window.scrollY - 80), behavior: 'auto' }); } catch (x2) { /* 그대로 */ }
+    });
     function toOut() { var y = outSec.getBoundingClientRect().top + window.scrollY - 80; window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' }); }
     function kind() { var r = $('input[name=kind]:checked', box); return r ? r.value : S.kind; }
     function setChip(html) { if (!chip) return; chip.hidden = !html; chip.innerHTML = html || ''; var x = $('button', chip); if (x) x.addEventListener('click', clearFile); }
@@ -504,7 +528,7 @@
           ta.value = ck.text; count();
           var s = ck.summary || {};
           setChip('<div class="file-chip">' + ico('file') + '<b>카피킬러 결과확인서 · ' + esc(S.docName) + '</b><span class="small muted">AI작성률 ' + (s.rate != null ? s.rate + '%' : '-') + ' · 표시 영역 ' + regCount(ck.spans) + '곳</span><button type="button" aria-label="파일 빼기">빼기</button></div>');
-          setStep(2); show(ckHtml(ck)); bindOut(); toOut();
+          histStart(); setStep(2); show(ckHtml(ck)); bindOut(); toOut();
           return;
         }
         if (!TI()) throw new Error('파일을 여는 도구를 불러오지 못했어요. 글을 붙여 넣어 주세요.');
@@ -738,8 +762,9 @@
       }
       askGo(need, name, go);
     }
+    var ASK_ON = false;   // 13.32(2026.11.23 대표 '버튼 누르면 되야지'): 단추에 토큰 숫자가 적혀 있어 누르면 바로 실행. 다시 묻게 하려면 true
     function askGo(need, name, go) {
-      if (need < 10 || S.skipAsk) { S.skipAsk = false; go(); return; }
+      if (!ASK_ON || need < 10 || S.skipAsk) { S.skipAsk = false; go(); return; }
       var el = document.createElement('div'); el.className = 'notice'; el.setAttribute('role', 'alertdialog');
       el.innerHTML = '<p><b>' + esc(name) + '에 ' + CH.tk(need) + '토큰이 빠집니다.</b>' + (CH.pass.left() != null ? ' 남은 토큰은 ' + CH.tk(CH.pass.left()) + '개입니다.' : '') + '</p><div class="acts" style="margin-top:10px"><button class="btn btn-p btn-s" type="button" data-yes>' + esc(name) + ' 시작</button><button class="btn btn-g btn-s" type="button" data-no>취소</button></div>';
       out.insertBefore(el, out.firstChild); el.scrollIntoView({ block: 'center', behavior: 'smooth' });
