@@ -553,6 +553,8 @@
       }).catch(function (e) { setChip(''); say((e && e.message) || '파일을 열지 못했어요. 글을 붙여 넣어 주세요.'); if (window.console && e && e.stack) console.error(e.stack); });
     }
     if (fileIn) fileIn.addEventListener('change', function () { readFile(fileIn.files && fileIn.files[0]); });
+    box.__read = readFile;   // 13.39 첫 화면 왼쪽 카드(data-hero-drop)가 고른 파일을 이 도구로 넘김
+    $$('.drop-up', box).forEach(function (l) { l.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); l.click(); } }); });
     if (drop) {
       ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); drop.classList.add('over'); if (over) over.hidden = false; } }); });
       ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function () { drop.classList.remove('over'); if (over) over.hidden = true; }); });
@@ -974,4 +976,18 @@
   }
 
   $$('[data-tool]').forEach(init);
+
+  /* 13.39(2026.11.24 대표 20:41 · 20:47 '한 화면에 무료 검사 파일 올리기가 좌측에 … 좌에는 한번에 파일 넣을 수 있도록'):
+     첫 화면 왼쪽 카드에 파일을 고르거나 끌어다 놓으면 아래 검사 도구(#check)로 넘겨 바로 검사(결과 칸으로 내려감). 글 붙여 넣기는 #check */
+  (function () {
+    var hd = document.querySelector('[data-hero-drop]'), hf = document.getElementById('chHeroFile'), tool = document.getElementById('check');
+    if (!hd || !tool) return;
+    function go(f) { if (!f || !tool.__read) return; tool.__read(f); }
+    function isFile(e) { return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0; }
+    if (hf) hf.addEventListener('change', function () { var f = hf.files && hf.files[0]; go(f); hf.value = ''; });
+    $$('.sc-up', hd).forEach(function (l) { l.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); l.click(); } }); });
+    ['dragenter', 'dragover'].forEach(function (n) { hd.addEventListener(n, function (e) { if (isFile(e)) { e.preventDefault(); hd.classList.add('over'); } }); });
+    ['dragleave', 'dragend'].forEach(function (n) { hd.addEventListener(n, function (e) { if (!e.relatedTarget || !hd.contains(e.relatedTarget)) hd.classList.remove('over'); }); });
+    hd.addEventListener('drop', function (e) { if (!isFile(e)) return; e.preventDefault(); hd.classList.remove('over'); go(e.dataTransfer.files[0]); });
+  })();
 })();
