@@ -1081,3 +1081,11 @@ a.card:hover .more { color: var(--brand); }
 @media (max-width: 520px) { .hz-act { display: grid; grid-template-columns: minmax(0, 1fr); } .hz-act .btn { white-space: normal; text-align: center; line-height: 1.35; min-height: 48px; padding: 8px 16px; } }
 .modal .buy-auto { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 650; color: var(--ink2); }
 .modal .buy-auto .ico { width: 18px; height: 18px; padding: 2px; border-radius: 50%; color: var(--ok); background: var(--ok-soft); stroke-width: 2.6; }
+
+/* 2026.11.24 20:11 대표 '약간 글씨 약간 효과넣던지 어울리는걸로 전문성있는걸로': 휴머나이징 진행 화면의 기술 문구. 빛이 글자 위를 천천히 지나감(밝은 · 어두운 화면 모두 테마 색), 움직임 줄이기면 멈춘 글씨 */
+.scan > p.scan-tech { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line2); background: linear-gradient(90deg, var(--brand-soft), transparent 75%); font-size: 13.5px; line-height: 1.65; color: var(--ink2); }
+.scan-tech .tech-ic { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 3px; fill: var(--brand); animation: techTw 2.4s ease-in-out infinite; }
+.scan-tech .tech-tx { font-weight: 600; letter-spacing: -.01em; background: linear-gradient(100deg, var(--ink2) 0%, var(--ink2) 40%, var(--brand) 47%, var(--ink) 50%, var(--brand) 53%, var(--ink2) 60%, var(--ink2) 100%); background-size: 260% 100%; background-position: 100% 0; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; animation: techSh 3.6s ease-in-out infinite; }
+@keyframes techSh { 0% { background-position: 100% 0; } 65%, 100% { background-position: 0% 0; } }
+@keyframes techTw { 0%, 100% { opacity: .55; transform: scale(.9); } 50% { opacity: 1; transform: scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { .scan-tech .tech-tx { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--ink2); } .scan-tech .tech-ic { animation: none; } }

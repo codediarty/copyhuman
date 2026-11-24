@@ -399,6 +399,7 @@
     check: ['문장 나누기', 'AI 패턴 DB 89억 개와 문장마다 대조하기', '공개한 판정 기준으로 안전 · 고위험 · 부적합 판정'],
     hum: ['AI 문체로 읽히는 표현 찾기', '같은 뜻의 사람 말투로 바꾸기', '숫자 · 이름 · 인용 · 말투가 그대로인지 확인']
   };
+  var HUM_T = 'AI 작성률을 낮추는 중입니다', TECH_NOTE = '원문의 의미를 최대한 보존하면서 AI 작성 패턴을 선별적으로 제거하는 독자적인 휴머나이징 기술을 적용합니다.';   // 2026.11.24 20:11 대표 문구
   function progHtml(label, i, n, note, kind, src) {
     var pct = n ? Math.round(i / n * 100) : 0, steps = STEPS[kind || 'check'], el = Date.now() - (progHtml.t0 || Date.now());
     var at = el > 3600 ? 2 : el > 1300 ? 1 : 0;
@@ -408,7 +409,8 @@
       (snippet ? '<div class="scan-doc" aria-hidden="true"><p>' + esc(snippet) + '</p><i class="scan-line"></i></div>' : '') +
       '<ol class="scan-steps">' + steps.map(function (t, k) { return '<li class="' + (k < at ? 'done' : k === at ? 'on' : '') + '">' + esc(t) + '</li>'; }).join('') + '</ol>' +
       '<div class="bar" aria-hidden="true"><i style="width:' + Math.max(8, n > 1 ? pct : Math.min(92, 18 + at * 30)) + '%"></i></div>' +
-      '<p>' + esc(note || '같은 글은 언제나 같은 결과가 나옵니다. 글은 처리한 뒤 저장하지 않습니다.') + '</p></div>';
+      (note === TECH_NOTE ? '<p class="scan-tech"><svg class="tech-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z"/></svg><span class="tech-tx">' + esc(note) + '</span></p>' :
+      '<p>' + esc(note || '같은 글은 언제나 같은 결과가 나옵니다. 글은 처리한 뒤 저장하지 않습니다.') + '</p>') + '</div>';   // 2026.11.24 대표 '약간 글씨 약간 효과 … 전문성있는걸로': 기술 문구는 빛이 지나가는 글씨
   }
   var progTimer = 0;
   function progTick(box) {   // 단계 표시만 시간에 맞춰 넘김
@@ -651,7 +653,7 @@
           var parts = [], cur = null;
           groups.forEach(function (gg) { if (!cur || (cur.text.length + gg.text.length + 2) > CHUNK) { cur = { text: '', gs: [] }; parts.push(cur); } cur.text += (cur.text ? '\n\n' : '') + gg.text; cur.gs.push(gg); });
           var newT = {}, GS = {}, ac = 0, aa = 0, changed = 0, tp = toneReq(t, true), tn = { conv: 0, miss: 0, note: '' };   // 2.0 정한 말투를 모든 묶음에 똑같이
-          show(progHtml('AI 점수 높은 문장부터 사람 말투로 바꾸는 중', 0, parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.', 'hum', sel.map(function (x) { return x.t; }).join(' ')));
+          show(progHtml(HUM_T, 0, parts.length, TECH_NOTE, 'hum', sel.map(function (x) { return x.t; }).join(' ')));
           var doneP = 0, notes = [];
           return par(parts, function (pt, k) {
             return CH.call('am.humanize', { text: pt.text, tone: tp, variant: 0, pass: CH.pass.code }, 150000).then(function (r) {
@@ -661,7 +663,7 @@
               if (tp === 'plain') { if (r.tone === 'plain') tn.conv++; else tn.miss++; if (r.toneNote) notes[k] = r.toneNote; }
               if (outs.length === pt.gs.length) { pt.gs.forEach(function (gg, j) { gg.out = outs[j].trim(); }); return; }
               return seq(pt.gs, function (gg) { return CH.call('am.humanize', { text: gg.text, tone: tp, variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { gg.out = (r2.text || gg.text).trim(); if (r2.aiAfter) { ac += r2.aiAfter.chars || 0; aa += r2.aiAfter.aiChars || 0; } }); });
-            }).then(function () { show(progHtml('AI 점수 높은 문장부터 사람 말투로 바꾸는 중', ++doneP, parts.length, '', 'hum', sel.map(function (x) { return x.t; }).join(' '))); });
+            }).then(function () { show(progHtml(HUM_T, ++doneP, parts.length, TECH_NOTE, 'hum', sel.map(function (x) { return x.t; }).join(' '))); });
           }).then(function () {
             notes.forEach(function (nt) { if (nt && !tn.note) tn.note = nt; });   // 2026.11.22 순서대로 첫 안내(하나씩 보낼 때와 같게)
             groups.forEach(function (gg) { if (gg.out == null || !gg.out) return; newT[gg.idx[0]] = gg.out; gg.idx.slice(1).forEach(function (ix) { newT[ix] = ''; GS[ix] = 1; }); });
@@ -793,10 +795,10 @@
       var t = S.lastT || canon(ta.value); if (!t) return;
       var C = chunk(t), need = CH.costParts('pro', C.parts);
       gate(need, 'AI 휴머나이징', function () {
-        busy(true); show(progHtml('AI 문체를 사람 말투로 바꾸는 중', 0, C.parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.', 'hum', t)); toOut();
+        busy(true); show(progHtml(HUM_T, 0, C.parts.length, TECH_NOTE, 'hum', t)); toOut();
         var tp = toneReq(t, false), doneH = 0;   // 2.0 글마다 정한 말투(모르면 서버 자동)
         par(C.parts, function (part, i) {
-          return CH.call('am.humanize', { text: part, tone: tp, variant: 0, pass: CH.pass.code }, 150000).then(function (r) { if (tp === 'auto' && (r.tone === 'plain' || r.tone === 'keep')) tp = r.tone; show(progHtml('AI 문체를 사람 말투로 바꾸는 중', ++doneH, C.parts.length, '숫자 · 이름 · 인용은 그대로 두고, 바꾼 문장마다 뜻이 같은지 확인합니다.', 'hum', t)); return r; });
+          return CH.call('am.humanize', { text: part, tone: tp, variant: 0, pass: CH.pass.code }, 150000).then(function (r) { if (tp === 'auto' && (r.tone === 'plain' || r.tone === 'keep')) tp = r.tone; show(progHtml(HUM_T, ++doneH, C.parts.length, TECH_NOTE, 'hum', t)); return r; });
         }, function () { return tp !== 'auto'; }).then(function (rs) {
           var text = rs.map(function (r, i) { return (i ? C.seps[i - 1] : '') + (r.text || ''); }).join('');
           var bc = 0, ba = 0, ac = 0, aa = 0, changed = 0;
@@ -945,16 +947,16 @@
       var cutAt = s && s.text && s.text.length > PAID_MAX ? PAID_MAX : 0;   // 한 번에 다듬는 글자 수를 넘는 파일은 뒤쪽 원래 글을 이어 붙임
       var whole = S.hum.text + (cutAt ? s.text.slice(cutAt) : '');
       var fail = function () { CH.toast('파일을 만들지 못했어요. 복사해서 붙여 넣어 주세요.'); };
-      if (k === 'txt' || k === 'md') { T.save(new Blob([whole.replace(/\n/g, '\r\n')], { type: 'text/plain;charset=utf-8' }), base + '_다듬은글.' + k); return; }
+      if (k === 'txt' || k === 'md') { T.save(new Blob([whole.replace(/\n/g, '\r\n')], { type: 'text/plain;charset=utf-8' }), base + '_휴머나이징.' + k); return; }
       if (k === 'pdf' && T.newPdf) {
         CH.toast('PDF를 만드는 중입니다. 글을 새로 조판하므로 그림과 표 배치는 옮기지 못합니다.');
-        T.newPdf(whole, base).then(function (b) { T.save(b, base + '_다듬은글.pdf'); }).catch(fail);
+        T.newPdf(whole, base).then(function (b) { T.save(b, base + '_휴머나이징.pdf'); }).catch(fail);
         return;
       }
       var p = s && s.doc ? T.exportSame(s, S.hum.text, { cutAt: cutAt }).catch(function () { return null; }) : Promise.resolve(null);
       p.then(function (r) {
-        if (r && r.blob) { T.save(r.blob, base + '_다듬은글.' + r.ext); if (r.kept) CH.toast('각주나 링크 글이 바뀐 문단 ' + r.kept + '개는 원래 글 그대로 두었어요.'); return; }
-        return T.newDocx(S.hum.text, base).then(function (b) { T.save(b, base + '_다듬은글.docx'); });
+        if (r && r.blob) { T.save(r.blob, base + '_휴머나이징.' + r.ext); if (r.kept) CH.toast('각주나 링크 글이 바뀐 문단 ' + r.kept + '개는 원래 글 그대로 두었어요.'); return; }
+        return T.newDocx(S.hum.text, base).then(function (b) { T.save(b, base + '_휴머나이징.docx'); });
       }).catch(fail);
     }
 
