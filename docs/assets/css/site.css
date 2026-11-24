@@ -1115,3 +1115,5 @@ a.card:hover .more { color: var(--brand); }
 .start-card .sc-over .ico { width: 26px; height: 26px; stroke-width: 2; }
 .start-card.sc-drop.over { border-style: solid; border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 14%, transparent); }
 .start-card.sc-drop.over .sc-over { display: grid; }
+/* 2026.11.25 대표: 요금 칸은 칸 어디를 눌러도 충전으로(ch.js) */
+.plan:has([data-open-buy]) { cursor: pointer; }
