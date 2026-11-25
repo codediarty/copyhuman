@@ -1117,3 +1117,14 @@ a.card:hover .more { color: var(--brand); }
 .start-card.sc-drop.over .sc-over { display: grid; }
 /* 2026.11.25 대표: 요금 칸은 칸 어디를 눌러도 충전으로(ch.js) */
 .plan:has([data-open-buy]) { cursor: pointer; }
+
+/* 2026.11.25 충전 창 코드 칸: 지금 쓰는 코드(끝 4자리 · 남은 토큰) · 이 브라우저에서 쓴 다른 코드로 한 번에 바꾸기 */
+.code-now { font-size: 13.5px; color: var(--ink2); }
+.code-now b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.code-alts { display: grid; gap: 6px; }
+.code-alts-h { font-size: 12.5px; color: var(--mut); }
+.code-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; min-height: 42px; padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line2); background: var(--card); font: inherit; font-size: 13.5px; color: var(--ink2); cursor: pointer; text-align: left; transition: border-color .15s; }
+.code-alt:hover, .code-alt:focus-visible { border-color: var(--brand); outline: none; }
+.code-alt b { font-family: var(--f-mono); letter-spacing: .04em; color: var(--ink); }
+.code-alt-go { flex: none; font-weight: 650; color: var(--brand-ink, var(--brand)); }
+.code-alt:disabled { opacity: .6; cursor: default; }

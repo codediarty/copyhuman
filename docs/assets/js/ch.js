@@ -102,28 +102,73 @@ var CH_STRIKE = true;
       .finally(function () { if (t) clearTimeout(t); });
   };
 
-  /* ---------- 토큰 코드 ---------- */
+  /* ---------- 토큰 코드 ----------
+     2026.11.25 대표('바로 이어서 하기 누르면 토큰 1, 난 분명 5만 토큰 충전했었는데'):
+     ① 나중에 시작한 코드 확인만 화면에 씀. 메일 단추(?code=)로 새 코드가 들어올 때, 먼저 보낸 예전 코드 확인이 늦게 와도 새 코드를 덮지 않음
+     ② 이 브라우저에서 쓴 코드(최대 5개)와 마지막으로 본 남은 토큰을 기억해, 충전 창에서 한 번에 바꿈(끝 4자리만 보여 줌)
+     ③ 지금 코드가 거의 비었고(10토큰 미만) 기억한 다른 코드에 토큰이 더 있으면 화면 위에 바꾸기 안내 */
+  var SEQ = 0, WANT = '', WSEQ = 0, DONE = 0, LOW_TOK = 10, swapShown = false;   // WANT: 손님이 넣고 있는 코드(이 확인이 끝날 때까지 뒤에서 하는 확인은 화면을 바꾸지 않음)
+  function codesGet() { try { var a = JSON.parse(localStorage.getItem('ch_codes') || '[]'); return Array.isArray(a) ? a.filter(function (x) { return x && typeof x.c === 'string'; }) : []; } catch (e) { return []; } }
+  function codesPut(a) { try { localStorage.setItem('ch_codes', JSON.stringify(a.slice(0, 5))); } catch (e) { /* 저장 없이 */ } }
+  function leftOf(i) { return i && typeof i.cr === 'number' ? i.cr : (i && typeof i.left === 'number' ? i.left : null); }
+  function codesSave(code, l) {
+    var n = String(code || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    if (n.length !== 16) return;
+    var a = codesGet().filter(function (x) { return x.c.toUpperCase().replace(/[^0-9A-Z]/g, '') !== n; });
+    a.unshift({ c: n.replace(/(.{4})(?=.)/g, '$1-'), l: typeof l === 'number' && isFinite(l) ? l : null, t: Date.now() });
+    codesPut(a);
+  }
+  function codesDrop(code) { var n = String(code || '').toUpperCase().replace(/[^0-9A-Z]/g, ''); codesPut(codesGet().filter(function (x) { return x.c.toUpperCase().replace(/[^0-9A-Z]/g, '') !== n; })); }
   var P = CH.pass = {
     code: CH.sget('ch_pass'), info: null,
     norm: function (c) { return String(c || '').toUpperCase().replace(/[^0-9A-Z]/g, ''); },
     fmt: function (c) { return P.norm(c).replace(/(.{4})(?=.)/g, '$1-'); },
     left: function () { return P.info && typeof P.info.cr === 'number' ? P.info.cr : (P.info && typeof P.info.left === 'number' ? P.info.left : null); },
-    set: function (code, info) { P.code = P.fmt(code); P.info = info || null; CH.sset('ch_pass', P.code); CH.sset('ch_rm', info ? String(rmOf(info)) : ''); paintChip(); },
-    clear: function () { P.code = ''; P.info = null; CH.sset('ch_pass', ''); CH.sset('ch_rm', ''); paintChip(); },
-    check: function (code) {
+    set: function (code, info) { P.code = P.fmt(code); P.info = info || null; CH.sset('ch_pass', P.code); CH.sset('ch_rm', info ? String(rmOf(info)) : ''); if (info) codesSave(P.code, P.left()); paintChip(); },
+    clear: function () { if (P.code) codesDrop(P.code); P.code = ''; P.info = null; CH.sset('ch_pass', ''); CH.sset('ch_rm', ''); paintChip(); },
+    codes: function () { return codesGet().filter(function (x) { return P.norm(x.c) !== P.norm(P.code); }); },
+    check: function (code, bg) {   // bg: 화면 뒤에서 지금 코드의 남은 토큰을 다시 읽는 확인(refresh)
       code = P.fmt(code);
       if (P.norm(code).length !== 16) return Promise.reject({ code: 'FORMAT', message: '토큰 코드는 16자리입니다. 메일에서 받은 코드를 그대로 넣어 주세요.' });
+      var my = ++SEQ, n = P.norm(code);
+      if (!bg) { WANT = n; WSEQ = my; }
       return CH.call('am.pass', { pass: code }, 20000).then(function (r) {
+        if (!bg && my === WSEQ) WANT = '';
         if (!r.pass) throw { code: 'PASS', message: '토큰 코드를 확인하지 못했습니다.' };
-        P.set(code, r.pass); return r.pass;
-      });
+        var use = bg ? (!WANT || WANT === n) && n === P.norm(P.code) && my > DONE : my === WSEQ;
+        if (use) { DONE = Math.max(DONE, my); P.set(code, r.pass); if (bg) swapHint(); }
+        else if (n !== P.norm(P.code)) codesSave(code, leftOf(r.pass));   // 늦게 온 다른 코드 확인: 지금 코드는 그대로, 기억한 남은 토큰만 새로
+        return r.pass;
+      }, function (e) { if (!bg && my === WSEQ) WANT = ''; throw e; });
     },
-    refresh: function () { if (!P.code) return Promise.resolve(null); return P.check(P.code).catch(function (e) { if (e && e.code === 'PASS') P.clear(); return null; }); }
+    refresh: function () { if (!P.code) return Promise.resolve(null); var c0 = P.code; return P.check(c0, true).catch(function (e) { if (e && e.code === 'PASS' && !WANT && P.norm(P.code) === P.norm(c0)) P.clear(); return null; }); }
   };
+  /* 지금 코드가 거의 비었고, 이 브라우저에서 쓴 다른 코드에 토큰이 더 남아 있으면 한 번 알려 줌(바꾸기는 누를 때만) */
+  function swapHint() {
+    var l = P.left();
+    if (swapShown || l == null || l >= LOW_TOK || !P.code) return;
+    var best = P.codes().filter(function (x) { return typeof x.l === 'number' && x.l >= LOW_TOK && x.l > l; }).sort(function (a, b) { return b.l - a.l; })[0];
+    if (!best) return;
+    swapShown = true;
+    var t0 = P.norm(P.code).slice(-4), t1 = P.norm(best.c).slice(-4);
+    var el = banner('<b>남은 토큰이 더 많은 코드가 이 브라우저에 있습니다</b><span>지금 쓰는 코드(끝 ' + CH.esc(t0) + ')는 남은 토큰 ' + CH.tk(l) + '개, 전에 쓴 코드(끝 ' + CH.esc(t1) + ')는 남은 토큰 ' + CH.tk(best.l) + '개입니다.</span><button class="btn btn-p btn-s" type="button" data-swap>끝 ' + CH.esc(t1) + ' 코드로 바꾸기</button>', 'wait');
+    var b = el.querySelector('[data-swap]');
+    if (b) b.addEventListener('click', function () {
+      b.disabled = true;
+      P.check(best.c).then(function () {
+        banner('<b>코드를 바꿨습니다</b><span>지금 쓰는 코드 끝 ' + CH.esc(t1) + ' · 남은 토큰 ' + CH.tk(P.left()) + '개</span>', 'ok');
+      }, function (e) {
+        b.disabled = false;
+        if (e && e.code === 'PASS') codesDrop(best.c);
+        banner('<b>그 코드를 확인하지 못했습니다</b><span>' + CH.esc((e && e.message) || '잠시 뒤 다시 시도해 주세요.') + '</span>', 'bad');
+      });
+    });
+  }
   function paintChip() {
     $$('[data-tok-chip]').forEach(function (b) {
       var l = P.left();
       b.innerHTML = CH.ico('key') + (P.code ? (l != null ? '토큰 <b>' + CH.tk(l) + '</b>' : '코드 등록됨') : '토큰 코드');
+      if (P.code) b.title = '지금 쓰는 토큰 코드 끝 ' + P.norm(P.code).slice(-4) + (l != null ? ' · 남은 토큰 ' + CH.tk(l) : ''); else b.removeAttribute('title');
     });
   }
   CH.paintChip = paintChip;
@@ -223,7 +268,11 @@ var CH_STRIKE = true;
           (need > 0 && !opt.pick && (humI ? (times < 1 || p.save) : times >= 1) ? '<span class="pk-fit' + (times < 1 ? ' no' : '') + '">' + (times >= 1 && p.id === rec.id ? CH.ico('check') + (humI ? '' : '이 글에 맞음 · ') : '') + (humI ? (times < 1 ? '이 글의 AI 작성률을 낮추기엔 부족해요' : '내 문서 AI 작성률 극한으로 낮추기') : '이 작업 약 ' + CH.n(times) + '번') + '</span>' : '') + '</label>';   // 11.22 대표 문구(다듬기: 모자람 · 프로 · 맥스만 '내 문서 AI 작성률 극한으로 낮추기'. 21:41 몇 회 반복은 빼고 라이트 · 플러스는 이 줄 없음, 전체 결과는 그대로)
       }).join('') + '</fieldset>' + '<p class="fine pk-note">반복할수록 AI 작성률을 극한까지 낮출 수 있습니다.</p>' + payPart +   // 11.23 21:24 대표: 줄 그은 금액 안내 대신(줄 그은 금액의 뜻은 금액에 마우스를 올리면 · 화면 읽기 프로그램, 요금 페이지에 그대로)
       '<div class="code-box"><label for="codeIn"><b>받은 토큰 코드 넣기</b></label><div class="code-row"><input id="codeIn" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX" value="' + CH.esc(P.code) + '"><button class="btn btn-d" type="button" data-code>코드 넣기</button></div>' +
-      '<p class="code-msg" data-code-msg role="status">' + (P.code ? '이 브라우저에 저장된 코드가 있습니다. 남은 토큰을 확인하려면 코드 넣기를 누르세요.' : '코드는 이 브라우저에만 저장됩니다. 다른 기기에서는 코드를 다시 넣어 주세요.') + '</p></div>' + offNote +
+      '<p class="code-msg" data-code-msg role="status">' + (P.code ? (P.left() != null ? '' : '이 브라우저에 저장된 코드가 있습니다. 남은 토큰을 확인하려면 코드 넣기를 누르세요.') : '코드는 이 브라우저에만 저장됩니다. 다른 기기에서는 코드를 다시 넣어 주세요.') + '</p>' +
+      (P.code && P.left() != null ? '<p class="code-now">지금 쓰는 코드 <b>끝 ' + CH.esc(P.norm(P.code).slice(-4)) + '</b> · 남은 토큰 <b>' + CH.tk(P.left()) + '</b></p>' : '') +
+      (P.codes().length ? '<div class="code-alts"><span class="code-alts-h">이 브라우저에서 쓴 다른 코드</span>' + P.codes().slice(0, 4).map(function (x) {
+        return '<button class="code-alt" type="button" data-alt="' + CH.esc(x.c) + '"><span>끝 <b>' + CH.esc(P.norm(x.c).slice(-4)) + '</b>' + (typeof x.l === 'number' ? ' · 남은 토큰 ' + CH.tk(x.l) : '') + '</span><span class="code-alt-go">이 코드로 바꾸기</span></button>';
+      }).join('') + '</div>' : '') + '</div>' + offNote +
       '<p class="fine"><a href="' + CH.url('terms') + '#refund">이용약관</a> · 문의 ' + CH.esc(CFG.mail || '') + '</p></div>';   // 11.23 21:24 대표: '처리하지 못한 요청은 …' 줄 삭제(약관에는 그대로)
     document.body.appendChild(box);
     document.body.style.overflow = 'hidden';
@@ -288,6 +337,7 @@ var CH_STRIKE = true;
       }).then(function () { b.disabled = false; });
     }
     $('[data-code]', box).addEventListener('click', submitCode);
+    $$('[data-alt]', box).forEach(function (b) { b.addEventListener('click', function () { ci.value = P.fmt(b.getAttribute('data-alt')); submitCode(); }); });
     ci.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submitCode(); } });
     ci.addEventListener('input', function () { var v = P.fmt(ci.value); if (v !== ci.value) ci.value = v; });
     $('.modal-x', box).addEventListener('click', close);
