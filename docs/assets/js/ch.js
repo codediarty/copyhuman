@@ -481,6 +481,15 @@ var CH_STRIKE = true;
   paintChip();
   /* 2026.11.25 남은 토큰은 모든 페이지에서 새로 읽음(예전: 도구가 있는 페이지만). 다른 창 · 앱에서 돌아오면 30초에 한 번까지 다시 */
   var lastRef = Date.now();
+  /* 2026.11.25 대표('뭐가 됐든 메일로 온 링크로 들어가면 그 토큰으로 적용'): 메일 단추 주소의 코드(?code= · ?pass=)는 어느 페이지든
+     저장된 예전 코드보다 먼저 넣고 그 코드만 읽음(글 검사 도구가 있는 페이지는 도구가 주소를 지움). 결제하고 돌아온 주소(?pay=)는 건드리지 않음 */
+  try {
+    var q0 = new URLSearchParams(location.search), qc0 = P.norm(q0.get('code') || q0.get('pass'));
+    if (/^[2-9A-HJ-NP-Z]{16}$/.test(qc0) && !Q.pay) {
+      if (P.norm(P.code) !== qc0) P.set(qc0);
+      if (!document.querySelector('[data-tool]')) { q0.delete('code'); q0.delete('pass'); var r0 = q0.toString(); history.replaceState(null, '', location.pathname + (r0 ? '?' + r0 : '') + location.hash); }
+    }
+  } catch (eQ0) { /* 주소 그대로 */ }
   if (P.code) P.refresh();
   window.addEventListener('focus', function () { if (!P.code || Date.now() - lastRef < 30000) return; lastRef = Date.now(); P.refresh(); });
 
