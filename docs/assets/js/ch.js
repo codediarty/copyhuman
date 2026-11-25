@@ -164,13 +164,39 @@ var CH_STRIKE = true;
       });
     });
   }
+  /* 2026.11.25 대표('결제한 사람들 토큰 얼마 남았는지 가시성 좋게'): 머리 토큰 칸에 늘 '남은 토큰 N'.
+     서버 답을 받기 전에는 이 브라우저가 마지막으로 본 남은 토큰을 바로 보여 주고(예전 '코드 등록됨' 대신), 답이 오면 새로 고침.
+     100토큰 이상은 소수점 없이(내림), 10토큰 미만이면 붉은색과 '충전' 안내(마우스를 올리면) */
+  function tokShort(x) { x = +x || 0; return x >= 100 ? Math.floor(x).toLocaleString('ko-KR') : CH.tk(x); }
+  function lastLeft(code) { var n = P.norm(code), m = codesGet().filter(function (x) { return P.norm(x.c) === n; })[0]; return m && typeof m.l === 'number' ? m.l : null; }
   function paintChip() {
+    var c = P.code, l = P.left();
+    if (c && l == null) l = lastLeft(c);
     $$('[data-tok-chip]').forEach(function (b) {
-      var l = P.left();
-      b.innerHTML = CH.ico('key') + (P.code ? (l != null ? '토큰 <b>' + CH.tk(l) + '</b>' : '코드 등록됨') : '토큰 코드');
-      if (P.code) b.title = '지금 쓰는 토큰 코드 끝 ' + P.norm(P.code).slice(-4) + (l != null ? ' · 남은 토큰 ' + CH.tk(l) : ''); else b.removeAttribute('title');
+      b.classList.toggle('has-left', !!c && l != null);
+      b.classList.toggle('low', !!c && l != null && l < LOW_TOK);
+      b.classList.toggle('wait', !!c && l == null);
+      if (!c) { b.innerHTML = CH.ico('key') + '토큰 코드'; b.removeAttribute('title'); b.removeAttribute('aria-label'); return; }
+      b.innerHTML = CH.ico('key') + '<span class="tk-lab"><span class="tk-pre">남은 </span>토큰</span><b>' + (l != null ? tokShort(l) : '<span class="tk-dots"></span>') + '</b>';
+      var t = '남은 토큰 ' + (l != null ? CH.tk(l) : '확인 중') + ' · 지금 쓰는 코드 끝 ' + P.norm(c).slice(-4) + (l != null && l < LOW_TOK ? ' · 토큰이 얼마 남지 않았습니다. 눌러서 충전하거나 다른 코드를 넣으세요.' : ' · 눌러서 충전 · 코드 바꾸기');
+      b.title = t; b.setAttribute('aria-label', t);
     });
+    document.documentElement.classList.toggle('tok-on', !!c);
+    fitHd();
   }
+  /* 머리 오른쪽(토큰 충전 · 남은 토큰)이 길어져 위 메뉴가 넘치면 그 폭에서는 메뉴를 접고 메뉴 단추로(좁은 노트북 · 큰 숫자) */
+  var fitT = 0;
+  function fitHd() {
+    var R = document.documentElement, nv = $('.hd .nav');
+    if (!nv) return;
+    R.classList.remove('hd-tight');
+    if (getComputedStyle(nv).display === 'none') return;
+    var nr = nv.getBoundingClientRect(), a = nv.lastElementChild;
+    if (nv.scrollWidth > nv.clientWidth + 1 || (a && a.getBoundingClientRect().right > nr.right + 1)) R.classList.add('hd-tight');
+  }
+  CH.fitHd = fitHd;
+  window.addEventListener('resize', function () { if (fitT) cancelAnimationFrame(fitT); fitT = requestAnimationFrame(function () { fitT = 0; fitHd(); }); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitHd(); });
   CH.paintChip = paintChip;
 
   /* ---------- 서버 정보(결제 준비 · 상품) ---------- */
@@ -453,7 +479,10 @@ var CH_STRIKE = true;
     CH.buy({ focusCode: code, title: t.hasAttribute('data-open-code') ? '받은 토큰 코드 넣기' : code ? 'AI 작성률 낮추기 · 토큰 충전' : null, pick: t.getAttribute('data-pack') || null });
   });
   paintChip();
-  if (P.code && document.querySelector('[data-tool]')) P.refresh();
+  /* 2026.11.25 남은 토큰은 모든 페이지에서 새로 읽음(예전: 도구가 있는 페이지만). 다른 창 · 앱에서 돌아오면 30초에 한 번까지 다시 */
+  var lastRef = Date.now();
+  if (P.code) P.refresh();
+  window.addEventListener('focus', function () { if (!P.code || Date.now() - lastRef < 30000) return; lastRef = Date.now(); P.refresh(); });
 
   /* ---------- 패턴 예시 바꾸기 ---------- */
   $$('[data-pat]').forEach(function (el) {

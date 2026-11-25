@@ -1128,3 +1128,35 @@ a.card:hover .more { color: var(--brand); }
 .code-alt b { font-family: var(--f-mono); letter-spacing: .04em; color: var(--ink); }
 .code-alt-go { flex: none; font-weight: 650; color: var(--brand-ink, var(--brand)); }
 .code-alt:disabled { opacity: .6; cursor: default; }
+
+/* 2026.11.25 머리 토큰 칸: 남은 토큰을 늘 크게(대표 '결제한 사람들 토큰 얼마 남았는지 가시성 좋게') */
+.tok-chip { white-space: nowrap; }
+.tok-chip .tk-lab { color: var(--ink2); font-weight: 650; }
+.tok-chip b { font-size: 15.5px; font-weight: 800; letter-spacing: -.01em; }
+.tok-chip.has-left { border-color: color-mix(in srgb, var(--ok) 45%, var(--line2)); background: var(--ok-soft); }
+.tok-chip.has-left:hover { border-color: var(--ok); }
+.tok-chip.low { border-color: color-mix(in srgb, var(--hi) 50%, var(--line2)); background: var(--hi-soft); }
+.tok-chip.low b { color: var(--hi); }
+.tok-chip.low:hover { border-color: var(--hi); }
+.tok-chip .tk-dots { display: inline-block; width: 22px; height: 8px; vertical-align: middle; background: radial-gradient(circle, currentColor 2.5px, transparent 3px) 0 50% / 8px 8px repeat-x; opacity: .55; animation: tkPulse 1s ease-in-out infinite; }
+@keyframes tkPulse { 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { .tok-chip .tk-dots { animation: none; } }
+@media (max-width: 520px) { .tok-chip { padding: 0 12px; gap: 6px; } .tok-chip .tk-pre { display: none; } }
+@media (max-width: 379px) { .tok-chip .tk-lab { display: none; } .tok-chip b { font-size: 15px; } }
+
+/* 2026.11.25 머리 '토큰 충전'(AIMarker 와 같은 자리) · 바로 옆 남은 토큰 칸. 좁은 화면은 메뉴 안에 '토큰 충전' */
+.hd-buy { display: inline-flex; align-items: center; min-height: 38px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: var(--ink2); font: inherit; font-size: 15px; font-weight: 600; letter-spacing: -.02em; white-space: nowrap; cursor: pointer; transition: color .15s, background-color .15s; }
+.hd-buy:hover { color: var(--ink); background: var(--bg2); }
+.hd-buy:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+@media (max-width: 600px) { .hd-buy { display: none; } }
+/* 남은 토큰 칸이 있을 때 머리 간격을 조금 좁혀 위 메뉴와 겹치지 않게. 그래도 넘치면 ch.js 가 hd-tight 를 붙여 메뉴를 접음 */
+.tok-on .hd .wrap { gap: 20px; }
+.tok-on .nav a { padding: 8px 9px; }
+@media (max-width: 1240px) { .tok-on .tok-chip .tk-pre { display: none; } }
+.hd-tight .nav { display: none; }
+.hd-tight .menu-btn { display: inline-flex; }
+.hd-tight .hd .wrap { justify-content: space-between; }
+.hd-tight .mnav { position: fixed; left: 0; right: 0; top: var(--hd-bottom, 68px); bottom: 0; z-index: 49; background: var(--bg); padding: 6px var(--gutter-r) 28px var(--gutter-l); overflow-y: auto; border-top: 1px solid var(--line); }
+.hd-tight .mnav.on { display: block; animation: fadeIn .2s var(--ease); }
+.hd-tight .mnav a { display: block; padding: 16px 4px; border-bottom: 1px solid var(--line); color: var(--ink); font-weight: 700; font-size: 18px; letter-spacing: -.03em; text-decoration: none !important; }
+.hd-tight .mnav a.btn { display: flex; justify-content: center; margin-top: 22px; min-height: 56px; padding: 0 20px; border-bottom: 0; color: var(--btn-ink); font-size: 17px; }
