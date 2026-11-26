@@ -1160,3 +1160,11 @@ a.card:hover .more { color: var(--brand); }
 .hd-tight .mnav.on { display: block; animation: fadeIn .2s var(--ease); }
 .hd-tight .mnav a { display: block; padding: 16px 4px; border-bottom: 1px solid var(--line); color: var(--ink); font-weight: 700; font-size: 18px; letter-spacing: -.03em; text-decoration: none !important; }
 .hd-tight .mnav a.btn { display: flex; justify-content: center; margin-top: 22px; min-height: 56px; padding: 0 20px; border-bottom: 0; color: var(--btn-ink); font-size: 17px; }
+
+/* 2026.11.26 대표 '/humanizer/ 문구 바꾸기': 머리 키워드는 낱말 덩어리째 줄바꿈(.nw), 글 종류 칩(논문 · 학술지 / 대학 과제 / 자기소개서 / 기타 문서)이 길어져 좁은 화면에서는 두 칸씩 */
+.nw { white-space: nowrap; }
+@media (max-width: 520px) {
+  .kinds { display: grid; grid-template-columns: 1fr 1fr; }
+  .kinds label { display: block; }
+  .kinds span { display: flex; justify-content: center; }
+}

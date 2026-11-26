@@ -8,7 +8,7 @@
   if (!CH || !LITE) return;
   var $ = CH.$, $$ = CH.$$, esc = CH.esc, ico = CH.ico;
   var FREE_MAX = CFG.freeMax || 6000, PAID_MAX = CFG.paidMax || 200000, CHUNK = CFG.chunk || 6000;
-  var KINDKO = { thesis: '논문', report: '레포트 · 과제', resume: '자기소개서', etc: '기타' };
+  var KINDKO = { thesis: '논문 · 학술지', report: '대학 과제', resume: '자기소개서', etc: '기타 문서' };   // 2026.11.26 대표: 글 종류 칩 이름(예전 논문 / 레포트 · 과제 / 자기소개서 / 기타)
 
   function TI() { return window.AMTextIn; }
   function canon(t) { return TI() ? TI().canon(t) : LITE.canon(t); }
