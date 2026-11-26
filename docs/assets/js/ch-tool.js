@@ -202,7 +202,8 @@
     var t = ctx && ctx.text; if (!t) return '';
     var need = CH.costParts('pro', chunk(t).parts), n = (N && N.aiN) || 0, risky = N && N.band && (N.band.key === 'unfit' || N.band.key === 'risk');
     return '<div class="rep-cta"><div class="rc-t"><b>' + (risky ? 'AI 작성률 ' + N.rate + '%, 지금 바로 낮출 수 있습니다' : '더 낮추고 싶다면 바로 다듬을 수 있습니다') + '</b>' +
-      '<span>' + (n ? 'AI 패턴 문장 ' + CH.n(n) + '개를 포함해 ' : '') + '글 전체를 사람 말투로 다듬고, 같은 기준으로 다시 재서 전후 AI 작성률을 보여 드립니다. 뜻 · 숫자 · 인용은 그대로.</span></div>' +
+      '<span>' + (n ? 'AI 패턴 문장 ' + CH.n(n) + '개를 포함해 ' : '') + '글 전체를 사람 말투로 다듬고, 같은 기준으로 다시 재서 전후 AI 작성률을 보여 드립니다. 뜻 · 숫자 · 인용은 그대로.</span>' +
+      (CH.pass.code ? '' : '<small class="rc-safe">' + ico('lock') + '<span><b>성균관컨설팅 안전결제</b> · 회원가입 없이 · 카드 · 토스페이 · 계좌이체</span></small>') + '</div>' +   // 13.44(2026.11.26 대표 '운영사 · 안전결제는 적절한 위치에, 조잡하지 않게'): 토큰 코드가 없을 때 한 줄
       '<button class="btn btn-p rc-go" type="button" data-act="hum"><span>휴머나이징 시작하기(AI 작성률 낮추기) · ' + CH.tk(need) + '토큰</span>' + ico('arrow') + '</button></div>';
   }
   /* 목표별 다듬기 계획(붙여 넣은 글): 검출 글자 가운데 얼마나 고쳐야 목표 아래로 내려가는지
