@@ -616,7 +616,7 @@
         busy(true); show(progHtml('전체 결과 만드는 중', 0, C.parts.length, '', 'check', t)); toOut();
         var doneF = 0;   // 2026.11.22 동시에 보내도 진행 표시는 끝난 조각 수
         par(C.parts, function (part, i) {
-          return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code }, 120000).then(function (r) { show(progHtml('전체 결과 만드는 중', ++doneF, C.parts.length, '', 'check', t)); return r; });
+          return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code, ci: i }, 120000).then(function (r) { show(progHtml('전체 결과 만드는 중', ++doneF, C.parts.length, '', 'check', t)); return r; });
         }).then(function (rs) {
           var N = merge(rs, true, t); N.total = t.length; N.locked = false;
           S.res = N; toneInit(t, N.autoTone); CH.pass.refresh().then(CH.paintChip);
@@ -642,7 +642,7 @@
       gate(row.tok, name, function () {
         busy(true); show(progHtml(name, 0, 1, '', 'check', t)); toOut();
         var doneS = 0, p = S.res.full ? Promise.resolve(S.res) : par(C.parts, function (part, i) {
-          return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code }, 120000).then(function (r) { show(progHtml('문장마다 AI 점수를 매기는 중', ++doneS, C.parts.length, '', 'check', t)); return r; });
+          return CH.call('am.style', { text: part, mode: 'check', tone: 'auto', pass: CH.pass.code, ci: i }, 120000).then(function (r) { show(progHtml('문장마다 AI 점수를 매기는 중', ++doneS, C.parts.length, '', 'check', t)); return r; });
         }).then(function (rs) { var N = merge(rs, true, t); N.total = t.length; N.locked = false; S.res = N; toneInit(t, N.autoTone); return N; });
         p.then(function (N) {
           var total = N.chars || noSp(t), cur = total * (N.rate || 0) / 100, PK = planPick(N, t, target), sel = PK.sel;   // 2.1 목표표와 같은 셈으로 고름
@@ -659,13 +659,13 @@
           show(progHtml(HUM_T, 0, parts.length, TECH_NOTE, 'hum', sel.map(function (x) { return x.t; }).join(' ')));
           var doneP = 0, notes = [];
           return par(parts, function (pt, k) {
-            return CH.call('am.humanize', { text: pt.text, tone: tp, variant: 0, pass: CH.pass.code }, 150000).then(function (r) {
+            return CH.call('am.humanize', { text: pt.text, tone: tp, variant: 0, pass: CH.pass.code, ci: k }, 150000).then(function (r) {
               var outs = String(r.text || '').split(/\n{2,}/);
               if (r.aiAfter) { ac += r.aiAfter.chars || 0; aa += r.aiAfter.aiChars || 0; }
               changed += (r.stats && r.stats.changed) || (r.applied || []).length || 0;
               if (tp === 'plain') { if (r.tone === 'plain') tn.conv++; else tn.miss++; if (r.toneNote) notes[k] = r.toneNote; }
               if (outs.length === pt.gs.length) { pt.gs.forEach(function (gg, j) { gg.out = outs[j].trim(); }); return; }
-              return seq(pt.gs, function (gg) { return CH.call('am.humanize', { text: gg.text, tone: tp, variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { gg.out = (r2.text || gg.text).trim(); if (r2.aiAfter) { ac += r2.aiAfter.chars || 0; aa += r2.aiAfter.aiChars || 0; } }); });
+              return seq(pt.gs, function (gg) { return CH.call('am.humanize', { text: gg.text, tone: tp, variant: 0, pass: CH.pass.code, ci: 1 }, 120000).then(function (r2) { gg.out = (r2.text || gg.text).trim(); if (r2.aiAfter) { ac += r2.aiAfter.chars || 0; aa += r2.aiAfter.aiChars || 0; } }); });
             }).then(function () { show(progHtml(HUM_T, ++doneP, parts.length, TECH_NOTE, 'hum', sel.map(function (x) { return x.t; }).join(' '))); });
           }).then(function () {
             notes.forEach(function (nt) { if (nt && !tn.note) tn.note = nt; });   // 2026.11.22 순서대로 첫 안내(하나씩 보낼 때와 같게)
@@ -801,7 +801,7 @@
         busy(true); show(progHtml(HUM_T, 0, C.parts.length, TECH_NOTE, 'hum', t)); toOut();
         var tp = toneReq(t, false), doneH = 0;   // 2.0 글마다 정한 말투(모르면 서버 자동)
         par(C.parts, function (part, i) {
-          return CH.call('am.humanize', { text: part, tone: tp, variant: 0, pass: CH.pass.code }, 150000).then(function (r) { if (tp === 'auto' && (r.tone === 'plain' || r.tone === 'keep')) tp = r.tone; show(progHtml(HUM_T, ++doneH, C.parts.length, TECH_NOTE, 'hum', t)); return r; });
+          return CH.call('am.humanize', { text: part, tone: tp, variant: 0, pass: CH.pass.code, ci: i }, 150000).then(function (r) { if (tp === 'auto' && (r.tone === 'plain' || r.tone === 'keep')) tp = r.tone; show(progHtml(HUM_T, ++doneH, C.parts.length, TECH_NOTE, 'hum', t)); return r; });
         }, function () { return tp !== 'auto'; }).then(function (rs) {
           var text = rs.map(function (r, i) { return (i ? C.seps[i - 1] : '') + (r.text || ''); }).join('');
           var bc = 0, ba = 0, ac = 0, aa = 0, changed = 0;
@@ -869,10 +869,10 @@
         busy(true); show(progHtml('표시된 문장 다듬는 중', 0, parts.length, '결과확인서에 표시된 문장만 사람 말투로 바꿉니다. 숫자 · 이름 · 인용은 그대로 둡니다.', 'hum', spans.map(function (sp) { return sp.t; }).join(' '))); toOut();
           var newT = spans.map(function (sp) { return sp.t; }), doneK = 0;
         par(parts, function (pt, i) {
-          return CH.call('am.humanize', { text: pt.text, tone: 'keep', variant: 0, pass: CH.pass.code }, 150000).then(function (r) {   // 2.0 표시된 문장만 바꾸므로 말투는 그대로(묶음마다 자동으로 정하면 일부만 '~다'로 바뀜)
+          return CH.call('am.humanize', { text: pt.text, tone: 'keep', variant: 0, pass: CH.pass.code, ci: i }, 150000).then(function (r) {   // 2.0 표시된 문장만 바꾸므로 말투는 그대로(묶음마다 자동으로 정하면 일부만 '~다'로 바뀜)
             var outs = String(r.text || '').split(/\n{2,}/);
             if (outs.length === pt.idx.length) { pt.idx.forEach(function (k, j) { newT[k] = outs[j].trim(); }); return; }
-            return seq(pt.idx, function (k) { return CH.call('am.humanize', { text: spans[k].t, tone: 'keep', variant: 0, pass: CH.pass.code }, 120000).then(function (r2) { newT[k] = (r2.text || spans[k].t).trim(); }); });
+            return seq(pt.idx, function (k) { return CH.call('am.humanize', { text: spans[k].t, tone: 'keep', variant: 0, pass: CH.pass.code, ci: 1 }, 120000).then(function (r2) { newT[k] = (r2.text || spans[k].t).trim(); }); });
           }).then(function () { show(progHtml('표시된 문장 다듬는 중', ++doneK, parts.length, '', 'hum', spans.map(function (sp) { return sp.t; }).join(' '))); });
         }).then(function () {
           var text = ck.text, pairs = [];
