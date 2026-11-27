@@ -618,9 +618,8 @@ var CH_STRIKE = true;
     var gt = function (k) { try { return S ? S.getItem(k) : null; } catch (e) { return null; } };
     var st = function (k, v) { try { if (S) S.setItem(k, v); } catch (e) { /* 무시 */ } };
     var v = gt("lv_id"), f = 0;
-    if (!v) { v = (Math.random().toString(36).slice(2, 10) + Date.now().toString(36)).slice(0, 16); st("lv_id", v); f = 1; }
+    if (!v) { v = (Math.random().toString(36).slice(2, 10) + Date.now().toString(36)).slice(0, 16); f = 1; }   // 1.1: 저장은 들어옴을 보낼 때
     var day = new Date(Date.now() + 324e5).toISOString().slice(0, 10), n = gt("lv_day") !== day ? 1 : 0;
-    if (n) st("lv_day", day);
     var rf = ""; try { rf = d.referrer ? new URL(d.referrer).hostname.replace(/^www\./, "") : ""; } catch (e1) { rf = ""; }
     if (rf === host) rf = "";
     var send = function (t, x) {
@@ -630,9 +629,11 @@ var CH_STRIKE = true;
     };
     var c = 0, timer = 0, on = false;
     var beat = function () { if (d.visibilityState !== "visible") return; if (++c > 120) { clearInterval(timer); return; } send("h"); };
-    var start = function () { if (on) return; on = true; send("v", "&n=" + n + "&f=" + f + "&r=" + encodeURIComponent(rf)); timer = setInterval(beat, 30000); };
+    var start = function () { if (on) return; on = true; if (f) st("lv_id", v); if (n) st("lv_day", day); send("v", "&n=" + n + "&f=" + f + "&r=" + encodeURIComponent(rf)); timer = setInterval(beat, 30000); };
     d.addEventListener("visibilitychange", function () { if (!on) return; send(d.visibilityState === "visible" ? "h" : "x"); });
-    addEventListener("pagehide", function () { if (on) send("x"); });
-    if (d.readyState === "complete") setTimeout(start, 600); else addEventListener("load", function () { setTimeout(start, 600); });
+    addEventListener("pagehide", function () { if (!on && !d.prerendering) start(); if (on) send("x"); });   // 1.1: 다 뜨기 전에 나가도 들어옴은 보냄
+    var go = function () { setTimeout(start, 300); };
+    var ready = function () { if (d.prerendering) d.addEventListener("prerenderingchange", go, { once: true }); else go(); };   // 1.1: 미리 열어 둔 쪽은 실제로 볼 때부터
+    if (d.readyState === "loading") d.addEventListener("DOMContentLoaded", ready); else ready();   // 1.1: 쪽이 다 뜨기(load)를 기다리지 않음
   } catch (e) { /* 신호 실패는 무시 */ }
 })();
