@@ -603,12 +603,12 @@ var CH_STRIKE = true;
   });
 })();
 
-/* 실시간 현황판 신호(2026.11.26 · 현황판 1.0.0, 2026.12.03 부터): 들어옴 · 화면을 보는 동안 30초마다 머묾 · 나감.
+/* 실시간 현황판 신호(2026.11.26 · 현황판 1.0.0, 2026.11.27 부터): 들어옴 · 화면을 보는 동안 30초마다 머묾 · 나감.
    글 · 이름 · 메일 · 토큰 코드는 보내지 않음(이 브라우저의 무작위 번호 · 본 쪽 주소 · 들어온 사이트 이름만). 검색 로봇은 보내지 않음. 실패해도 화면에 영향 없음 */
 (function () {
   try {
     if (window.__lvOn) return; window.__lvOn = 1;
-    if (Date.now() < Date.UTC(2026, 11, 2, 15, 0)) return;   // 개인정보처리방침 '바뀌면 7일 전 알림'에 따라 2026.12.03 00:00(한국)부터 셈(11.26 알림)
+    if (Date.now() < Date.UTC(2026, 10, 26, 15, 0)) return;   // 2026.11.27 00:00(한국)부터 셈(대표 11.27 결정, 개인정보처리방침 11.26 알림 · 처음엔 12.03)
     var U = "https://script.google.com/macros/s/AKfycbynqa4gSpMjYlnOHPH6xaM3d2vys7aVMJHLuxQL_9osna0026p-Z6uywH2d4d0fzUbK_w/exec";
     var d = document, l = location, nav = navigator, S = null;
     if (nav.webdriver || /bot|crawl|spider|slurp|lighthouse|headless|facebookexternalhit|yeti|daumoa/i.test(nav.userAgent || "")) return;
